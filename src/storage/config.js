@@ -7,7 +7,15 @@ class ConfigManager {
             preloadPages: 10,
             cacheExpireTime: 86400000,
             pageLoadInterval: 1000,  // 页面读取间隔（毫秒）
-            maxCacheSize: 50 * 1024 * 1024  // 最大缓存容量（字节），默认50MB
+            maxCacheSize: 50 * 1024 * 1024,  // 最大缓存容量（字节），默认50MB
+            // 新增配置项
+            useIndexedDB: true,  // 是否启用 IndexedDB
+            replyCollapseThreshold: 3,  // 楼中楼折叠阈值
+            enableReplyCollapse: true,  // 是否启用楼中楼折叠功能
+            incrementalRenderBatch: 3,  // 增量渲染的批次大小（页数）
+            enableWebWorkerParse: false,  // 是否启用 Web Worker 解析（实验性）
+            webWorkerParseThreshold: 800,  // 启用 Web Worker 的帖子数量阈值
+            enablePerformanceLog: false  // 是否启用性能日志（调试用）
         };
         this.config = this.loadConfig();
     }
@@ -42,3 +50,5 @@ class ConfigManager {
         return { ...this.config };
     }
 }
+
+export default ConfigManager;
