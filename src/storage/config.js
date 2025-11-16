@@ -15,7 +15,9 @@ class ConfigManager {
             incrementalRenderBatch: 3,  // 增量渲染的批次大小（页数）
             enableWebWorkerParse: false,  // 是否启用 Web Worker 解析（实验性）
             webWorkerParseThreshold: 800,  // 启用 Web Worker 的帖子数量阈值
-            enablePerformanceLog: false  // 是否启用性能日志（调试用）
+            enablePerformanceLog: false,  // 是否启用性能日志（调试用）
+            useVirtualScroll: true,  // 是否启用虚拟滚动（性能优化）
+            virtualScrollBufferSize: 10  // 虚拟滚动缓冲区大小（视口上下额外渲染的楼层数）
         };
         this.config = this.loadConfig();
     }

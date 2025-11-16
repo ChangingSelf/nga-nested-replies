@@ -2,6 +2,7 @@
 
 import ThreadParser from './thread-parser.js';
 import ThreadRenderer from './thread-renderer.js';
+import VirtualRenderer from './virtual-renderer.js';
 import { measure } from '../utils/performance.js';
 
 /**
@@ -16,8 +17,15 @@ class PageLoader {
         this.progressCallback = progressCallback || (() => {});
         this.loadedPages = new Set();
         this.parser = new ThreadParser(config);
-        this.renderer = new ThreadRenderer(config, storageManager);
+        
+        // 根据配置选择渲染器（虚拟滚动或普通渲染）
+        const useVirtualScroll = config.useVirtualScroll !== false; // 默认开启
+        this.renderer = useVirtualScroll 
+            ? new VirtualRenderer(config, storageManager)
+            : new ThreadRenderer(config, storageManager);
+        
         this.isFirstConversion = true;
+        console.log(`[PageLoader] 使用${useVirtualScroll ? '虚拟滚动' : '普通'}渲染器`);
     }
 
     /**

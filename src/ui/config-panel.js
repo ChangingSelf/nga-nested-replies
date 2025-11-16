@@ -110,6 +110,24 @@ class ConfigPanel {
                     </div>
                 </div>
                 
+                <div style="margin-bottom: 24px;">
+                    <h3 style="margin: 0 0 16px; font-size: 16px; color: #374151;">性能优化</h3>
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: flex; align-items: center; cursor: pointer;">
+                            <input type="checkbox" id="useVirtualScroll" ${config.useVirtualScroll !== false ? 'checked' : ''}
+                                style="width: 18px; height: 18px; margin-right: 8px; cursor: pointer;" />
+                            <span style="color: #4b5563; font-size: 14px;">启用虚拟滚动（推荐）</span>
+                        </label>
+                        <small style="color: #6b7280; font-size: 12px; margin-left: 26px; display: block;">只渲染可见区域的楼层，大幅减少卡顿，适合500楼以上的长帖</small>
+                    </div>
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; margin-bottom: 8px; color: #4b5563; font-size: 14px;">虚拟滚动缓冲区大小</label>
+                        <input type="number" id="virtualScrollBufferSize" value="${config.virtualScrollBufferSize || 10}" min="5" max="30" 
+                            style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;" />
+                        <small style="color: #6b7280; font-size: 12px;">视口上下额外渲染的楼层数，越大滚动越流畅但内存占用越高（5-30）</small>
+                    </div>
+                </div>
+                
                 <div style="display: flex; gap: 12px;">
                     <button id="saveConfig" 
                         style="flex: 1; padding: 10px 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 6px; font-size: 14px; cursor: pointer; transition: opacity 0.2s;">
@@ -236,6 +254,8 @@ class ConfigPanel {
         const cacheExpireTime = parseInt(document.getElementById('cacheExpireTime').value);
         const pageLoadInterval = parseInt(document.getElementById('pageLoadInterval').value);
         const maxCacheSize = parseInt(document.getElementById('maxCacheSize').value);
+        const useVirtualScroll = document.getElementById('useVirtualScroll').checked;
+        const virtualScrollBufferSize = parseInt(document.getElementById('virtualScrollBufferSize').value);
 
         if (initialLoadPages < 1 || initialLoadPages > 50) {
             Toast.error('初始加载页数必须在1-50之间');
@@ -252,12 +272,19 @@ class ConfigPanel {
             return;
         }
 
+        if (virtualScrollBufferSize < 5 || virtualScrollBufferSize > 30) {
+            Toast.error('虚拟滚动缓冲区大小必须在5-30之间');
+            return;
+        }
+
         const success = this.configManager.saveConfig({
             initialLoadPages,
             preloadPages,
             cacheExpireTime,
             pageLoadInterval,
-            maxCacheSize
+            maxCacheSize,
+            useVirtualScroll,
+            virtualScrollBufferSize
         });
 
         if (success) {
