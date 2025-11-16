@@ -12,15 +12,15 @@ function createProgressBar() {
     progressBar.id = 'nga-progress-bar';
     progressBar.style.cssText = `
         position: fixed;
-        bottom: 80px;
-        right: 0;
+        bottom: 20px;
+        right: 30px;
         background: rgba(0,0,0,0.85);
         color: white;
         padding: 8px 12px;
-        border-radius: 8px 0 0 8px;
+        border-radius: 8px;
         font-size: 13px;
         z-index: 9999;
-        box-shadow: -2px 2px 8px rgba(0,0,0,0.3);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
         cursor: pointer;
         transition: all 0.3s ease;
         max-width: 350px;
@@ -105,18 +105,8 @@ function hideProgressDetail() {
 function removeProgressBar() {
     if (progressBar) {
         isProgressLoading = false;
-        // 加载完成后自动折叠，不完全移除
+        // 加载完成后保持显示并自动折叠
         collapseProgress();
-        // 3秒后淡出
-        setTimeout(() => {
-            if (progressBar) {
-                progressBar.style.opacity = '0';
-                setTimeout(() => {
-                    if (progressBar && progressBar.parentNode) {
-                        progressBar.parentNode.removeChild(progressBar);
-                    }
-                }, 500);
-            }
-        }, 3000);
+        // 不自动移除，让用户可以看到最终状态
     }
 }

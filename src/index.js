@@ -262,45 +262,6 @@
             this.configManager = configMgr;
             this.cacheManager = cacheMgr;
             this.panel = null;
-            this.floatBtn = null;
-            this.createFloatButton();
-        }
-
-        createFloatButton() {
-            this.floatBtn = document.createElement('div');
-            this.floatBtn.id = 'nga-thread-config-btn';
-            this.floatBtn.innerHTML = '⚙️';
-            this.floatBtn.style.cssText = `
-                position: fixed;
-                bottom: 80px;
-                right: 30px;
-                width: 50px;
-                height: 50px;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                border-radius: 50%;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 24px;
-                cursor: pointer;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-                z-index: 10000;
-                transition: all 0.3s ease;
-            `;
-            
-            this.floatBtn.addEventListener('mouseenter', () => {
-                this.floatBtn.style.transform = 'scale(1.1)';
-                this.floatBtn.style.boxShadow = '0 6px 20px rgba(0,0,0,0.25)';
-            });
-            
-            this.floatBtn.addEventListener('mouseleave', () => {
-                this.floatBtn.style.transform = 'scale(1)';
-                this.floatBtn.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
-            });
-            
-            this.floatBtn.addEventListener('click', () => this.togglePanel());
-            
-            document.body.appendChild(this.floatBtn);
         }
 
         createPanel() {
@@ -1123,15 +1084,15 @@
         progressBar.id = 'nga-progress-bar';
         progressBar.style.cssText = `
             position: fixed;
-            bottom: 80px;
-            right: 0;
+            bottom: 20px;
+            right: 30px;
             background: rgba(0,0,0,0.85);
             color: white;
             padding: 8px 12px;
-            border-radius: 8px 0 0 8px;
+            border-radius: 8px;
             font-size: 13px;
             z-index: 9999;
-            box-shadow: -2px 2px 8px rgba(0,0,0,0.3);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
             cursor: pointer;
             transition: all 0.3s ease;
             max-width: 350px;
@@ -1172,6 +1133,13 @@
         // 鼠标悬停展开/折叠
         progressBar.addEventListener('mouseenter', expandProgress);
         progressBar.addEventListener('mouseleave', collapseProgress);
+        
+        // 点击打开设置面板
+        progressBar.addEventListener('click', () => {
+            if (configPanel) {
+                configPanel.togglePanel();
+            }
+        });
     }
     
     function expandProgress() {
@@ -1246,19 +1214,9 @@
     function removeProgressBar() {
         if (progressBar) {
             isProgressLoading = false;
-            // 加载完成后自动折叠，不完全移除
+            // 加载完成后保持显示并自动折叠
             collapseProgress();
-            // 3秒后淡出
-            setTimeout(() => {
-                if (progressBar) {
-                    progressBar.style.opacity = '0';
-                    setTimeout(() => {
-                        if (progressBar && progressBar.parentNode) {
-                            progressBar.parentNode.removeChild(progressBar);
-                        }
-                    }, 500);
-                }
-            }, 3000);
+            // 不自动移除，让用户可以看到最终状态
         }
     }
 
@@ -1336,7 +1294,7 @@
     // 从缓存加载
     function loadFromCache(meta, info) {
         try {
-            updateProgressLine2('正在加载缓存...');
+            updateProgressLine2('🔄 正在从缓存加载...');
             
             const container = document.getElementById('m_posts_c');
             if (!container) {
@@ -1348,40 +1306,64 @@
             const cachedPages = meta.cachedPages || [];
             console.log(`[缓存加载] 找到 ${cachedPages.length} 个缓存页面`);
             
-            // 清空容器，避免重复
+            if (cachedPages.length === 0) {
+                console.log('[缓存加载] 缓存为空，转为全新加载');
+                startFreshLoading(info);
+                return;
+            }
+            
+            // 清空容器，避免重复（按照记忆要求，加载前清空）
             container.innerHTML = '';
+            loadedPages.clear();
             
             cachedPages.sort((a, b) => a - b);
+            let loadedCount = 0;
             for (const page of cachedPages) {
                 const pageData = cacheManager.getPageContent(page);
                 if (pageData && pageData.rawHTML) {
                     appendPosts(pageData.rawHTML, page, container);
                     loadedPages.add(page);
+                    loadedCount++;
                 }
+            }
+            
+            console.log(`[缓存加载] 实际加载了 ${loadedCount} 个页面`);
+
+            if (loadedCount === 0) {
+                console.log('[缓存加载] 没有有效缓存内容，转为全新加载');
+                startFreshLoading(info);
+                return;
             }
 
             cacheManager.updateLastAccess();
-            displayedPageCount = cachedPages.length;
-            updateProgressLine2('正在构建楼中楼...');
+            displayedPageCount = loadedCount;
+            updateProgressLine2('🔄 缓存加载中 - 正在构建楼中楼...');
+            updateProgressDetail(loadedCount, info.totalPages, loadedCount);
+            
+            // 移除分页元素
+            removeAllPaginationElements();
             
             setTimeout(() => {
-                enableThreadedView();
-                
-                // 初始化滚动加载
-                if (!isLoaderTab) {
-                    setTimeout(initScrollLoading, 1000);
-                }
-                
-                if (cachedPages.length < info.totalPages) {
-                    const nextPage = Math.max(...cachedPages) + 1;
-                    if (nextPage <= info.totalPages) {
-                        updateProgressLine2(`后台加载中 ${nextPage}/${info.totalPages}`);
-                        loadNextPage(nextPage, info.totalPages, tid, container, true);
-                    } else {
-                        setTimeout(removeProgressBar, 2000);
+                try {
+                    enableThreadedView();
+                    expandAllCollapses(container);
+                    updateProgressLine2(`✅ 缓存加载完成，共 ${loadedCount} 页`);
+                    
+                    // 初始化滚动加载
+                    if (!isLoaderTab) {
+                        setTimeout(initScrollLoading, 1000);
                     }
-                } else {
-                    setTimeout(removeProgressBar, 2000);
+                    
+                    if (cachedPages.length < info.totalPages) {
+                        const nextPage = Math.max(...cachedPages) + 1;
+                        if (nextPage <= info.totalPages) {
+                            updateProgressLine2(`🔄 缓存: ${loadedCount}页 | 后台加载 ${nextPage}/${info.totalPages}`);
+                            loadNextPage(nextPage, info.totalPages, tid, container, true);
+                        }
+                    }
+                } catch (e) {
+                    console.error('[缓存加载] 构建楼中楼失败:', e);
+                    updateProgressLine2('构建失败，请刷新页面');
                 }
             }, 500);
         } catch (e) {
@@ -1395,7 +1377,7 @@
         try {
             if (info.totalPages <= info.currentPage) {
                 console.log('[NGA 楼中楼] 已最后一页');
-                updateProgressLine2('已是最后一页');
+                updateProgressLine2('⚠️ 已是最后一页');
                 setTimeout(removeProgressBar, 2000);
                 return;
             }
@@ -1426,7 +1408,7 @@
             
             // 如果只有一页，直接转换
             if (info.totalPages === 1) {
-                updateProgressLine2('正在构建楼中楼...');
+                updateProgressLine2('📥 正在构建楼中楼...');
                 setTimeout(() => {
                     enableThreadedView();
                     if (!isLoaderTab) {
@@ -1437,7 +1419,7 @@
                 return;
             }
             
-            updateProgressLine2(`正在加载：第 ${info.currentPage + 1} 页 / 共 ${info.totalPages} 页`);
+            updateProgressLine2(`📥 全新加载：第 ${info.currentPage + 1} 页 / 共 ${info.totalPages} 页`);
             loadNextPage(info.currentPage + 1, info.totalPages, tid, container, false, meta);
         } catch (e) {
             console.error('[NGA 楼中楼] startFreshLoading 错误:', e);
@@ -1489,7 +1471,7 @@
                 return;
             }
             
-            updateProgressLine2(`正在加载：第 ${page} 页 / 共 ${total} 页`);
+            updateProgressLine2(`📥 加载中：第 ${page} 页 / 共 ${total} 页`);
             const cachedCount = cacheManager ? (cacheManager.getMeta()?.cachedPages.length || 0) : 0;
             updateProgressDetail(loadedPages.size, total, cachedCount);
 
@@ -1550,7 +1532,7 @@
             isFirstConversion = false;
             displayedPageCount = loadedPages.size;
             
-            updateProgressLine2('正在构建楼中楼...');
+            updateProgressLine2('🔨 正在构建楼中楼...');
             removeAllPaginationElements();
             
             setTimeout(() => {
@@ -1570,14 +1552,14 @@
                     
                     if (nextPage <= total) {
                         if (nextPage <= actualLimit) {
-                            updateProgressLine2(`后台加载中 ${nextPage}/${actualLimit}`);
+                            updateProgressLine2(`⏬ 后台加载中 ${nextPage}/${actualLimit}`);
                         } else {
-                            updateProgressLine2(`后台预加载完成，共${actualLimit}页`);
+                            updateProgressLine2(`✅ 后台预加载完成，共${actualLimit}页`);
                         }
                         // 修复：使用 total 而不是 actualLimit，否则会过早停止
                         loadNextPage(nextPage, total, tid, container, true, metaData);
                     } else {
-                        updateProgressLine2(`完成！共 ${displayedPageCount} 页`);
+                        updateProgressLine2(`✅ 完成！共 ${displayedPageCount} 页`);
                         setTimeout(removeProgressBar, 3000);
                     }
                 } catch (e) {
@@ -1607,13 +1589,13 @@
         isFinished = true;
         
         if (isFirstConversion) {
-            updateProgressLine2('正在构建楼中楼...');
+            updateProgressLine2('🔨 正在构建楼中楼...');
             removeAllPaginationElements();
             setTimeout(() => {
                 try {
                     enableThreadedView();
                     expandAllCollapses(container);
-                    updateProgressLine2(`完成！共 ${loadedPages.size} 页`);
+                    updateProgressLine2(`✅ 完成！共 ${loadedPages.size} 页`);
                     
                     // 初始化滚动加载
                     if (!isLoaderTab) {
@@ -1626,7 +1608,7 @@
                 }
             }, 1000);
         } else {
-            updateProgressLine2(`后台加载完成！共 ${loadedPages.size} 页`);
+            updateProgressLine2(`✅ 后台加载完成！共 ${loadedPages.size} 页`);
             setTimeout(removeProgressBar, 3000);
         }
     }
