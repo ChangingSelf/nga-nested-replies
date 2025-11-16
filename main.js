@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NGA 楼中楼（改进版）
 // @namespace    http://tampermonkey.net/
-// @version      2.0.2
+// @version      2.0.3
 // @description  遍历帖子所有界面并自动展开折叠内容，然后重新组织为楼中楼形式。支持渐进式加载、智能缓存、配置管理
 // @author       cloud_rider
 // @match        https://bbs.nga.cn/read.php?tid=*
@@ -19,7 +19,7 @@
 
 (function() {
     'use strict';
-    console.log('[NGA 楼中楼] 脚本启动 v2.0.2');
+    console.log('[NGA 楼中楼] 脚本启动 v2.0.3');
 
     // ========== 配置管理模块 ==========
     class ConfigManager {
@@ -656,14 +656,16 @@
                             const isExpired = !this.isCacheValid(item.meta);
                             const statusColor = isExpired ? '#ef4444' : '#10b981';
                             const statusText = isExpired ? '已过期' : '有效';
+                            const threadTitle = item.meta.title || '未命名帖子';
                             
                             return `
                                 <div style="padding: 12px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
                                     <div style="flex: 1;">
                                         <div style="font-weight: 500; color: #1f2937; margin-bottom: 4px;">
-                                            <a href="https://bbs.nga.cn/read.php?tid=${item.tid}" target="_blank" style="color: #3b82f6; text-decoration: none;">帖子 #${item.tid}</a>
+                                            <a href="https://bbs.nga.cn/read.php?tid=${item.tid}" target="_blank" style="color: #3b82f6; text-decoration: none;">${threadTitle}</a>
                                         </div>
                                         <div style="font-size: 12px; color: #6b7280;">
+                                            TID: ${item.tid} | 
                                             页数：${item.meta.cachedPages.length}/${item.meta.totalPages} | 
                                             大小：${this.formatSize(item.size)} | 
                                             最后访问：${lastAccessTime} |
@@ -839,6 +841,44 @@
         
         console.warn('[TID 提取] 未能提取 tid');
         return null;
+    }
+    
+    // 提取帖子标题
+    function extractThreadTitle() {
+        try {
+            // 尝试多种方法提取标题
+            // 方法1：从 h1.w100 中提取
+            const h1Title = document.querySelector('h1.w100');
+            if (h1Title && h1Title.textContent.trim()) {
+                return h1Title.textContent.trim();
+            }
+            
+            // 方法2：从 topicsubject 中提取
+            const topicSubject = document.getElementById('topicsubject');
+            if (topicSubject && topicSubject.textContent.trim()) {
+                return topicSubject.textContent.trim();
+            }
+            
+            // 方法3：从页面 title 中提取
+            const pageTitle = document.title;
+            if (pageTitle) {
+                // 移除 NGA 后缀
+                const cleanTitle = pageTitle.replace(/\s*-\s*NGA.*$/i, '').trim();
+                if (cleanTitle) return cleanTitle;
+            }
+            
+            // 方法4：从主楼 postsubject 中提取
+            const mainPostSubject = document.querySelector('[id^="postsubject0"]');
+            if (mainPostSubject && mainPostSubject.textContent.trim()) {
+                return mainPostSubject.textContent.trim();
+            }
+            
+            console.warn('[标题提取] 未找到帖子标题');
+            return '未命名帖子';
+        } catch (e) {
+            console.error('[标题提取] 提取失败:', e);
+            return '未命名帖子';
+        }
     }
     
     const urlParams = new URLSearchParams(window.location.search);
@@ -1097,7 +1137,7 @@
     // 进度条管理
     function createProgressBar() {
         progressBar = document.createElement('div');
-        progressBar.style.cssText = `position:fixed;top:20px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.85);color:white;padding:12px 20px;border-radius:12px;font-size:15px;font-weight:bold;text-align:center;z-index:9999;min-width:300px;box-shadow:0 4px 12px rgba(0,0,0,0.3);`;
+        progressBar.style.cssText = `position:fixed;top:20px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.85);color:white;padding:12px 20px;border-radius:12px;font-size:15px;font-weight:bold;text-align:center;z-index:9999;min-width:350px;box-shadow:0 4px 12px rgba(0,0,0,0.3);`;
         const line1 = document.createElement('div'); 
         line1.textContent = '楼中楼脚本正在运行，请稍候'; 
         line1.style.marginBottom = '6px';
@@ -1105,13 +1145,69 @@
         progressLine2.textContent = '正在初始化...'; 
         progressLine2.style.fontWeight = 'normal'; 
         progressLine2.style.fontSize = '14px';
+        progressLine2.style.marginBottom = '4px';
+        
+        // 添加详细进度信息
+        const progressLine3 = document.createElement('div');
+        progressLine3.id = 'progress-detail';
+        progressLine3.style.fontWeight = 'normal';
+        progressLine3.style.fontSize = '12px';
+        progressLine3.style.color = '#d1d5db';
+        progressLine3.style.display = 'none';
+        
         progressBar.appendChild(line1); 
-        progressBar.appendChild(progressLine2); 
+        progressBar.appendChild(progressLine2);
+        progressBar.appendChild(progressLine3);
         document.body.appendChild(progressBar);
     }
 
     function updateProgressLine2(t) { 
         if (progressLine2) progressLine2.textContent = t; 
+    }
+    
+    function updateProgressDetail(loaded, total, cached = 0) {
+        const detailDiv = document.getElementById('progress-detail');
+        if (detailDiv) {
+            detailDiv.style.display = 'block';
+            detailDiv.textContent = `已加载: ${loaded} 页 | 总页数: ${total} | 已缓存: ${cached} 页`;
+        }
+    }
+    
+    function hideProgressDetail() {
+        const detailDiv = document.getElementById('progress-detail');
+        if (detailDiv) {
+            detailDiv.style.display = 'none';
+        }
+    }
+    
+    function removeAllPaginationElements() {
+        try {
+            // 移除所有分页相关元素
+            const paginationIds = [
+                'm_pbtntop',    // 主楼顶部分页
+                'm_pbtnbtm',    // 主楼底部分页
+                'pagebtop',     // 顶部分页按钮
+                'pagebbtm'      // 底部分页按钮
+            ];
+            
+            paginationIds.forEach(id => {
+                const element = document.getElementById(id);
+                if (element) {
+                    element.remove();
+                    console.log(`[分页移除] 已移除 ${id}`);
+                }
+            });
+            
+            // 移除所有包含分页链接的容器
+            document.querySelectorAll('.page').forEach(el => {
+                if (el.textContent.includes('页') || el.querySelector('a[href*="page="]')) {
+                    el.remove();
+                    console.log('[分页移除] 已移除分页容器');
+                }
+            });
+        } catch (e) {
+            console.error('[分页移除] 移除失败:', e);
+        }
     }
     
     function removeProgressBar() { 
@@ -1251,8 +1347,10 @@
             }
 
             // 初始化元数据，当前页已经在页面上，直接缓存
+            const threadTitle = extractThreadTitle();
             const meta = {
                 tid: tid,
+                title: threadTitle,
                 totalPages: info.totalPages,
                 cachedPages: [info.currentPage],
                 lastAccess: Date.now(),
@@ -1330,6 +1428,8 @@
             }
             
             updateProgressLine2(`正在加载：第 ${page} 页 / 共 ${total} 页`);
+            const cachedCount = cacheManager ? (cacheManager.getMeta()?.cachedPages.length || 0) : 0;
+            updateProgressDetail(loadedPages.size, total, cachedCount);
 
             const url = `${window.location.origin}/read.php?tid=${tid}&loader=1&page=${page}`;
             GM_openInTab(url, { active: false });
@@ -1389,8 +1489,7 @@
             displayedPageCount = loadedPages.size;
             
             updateProgressLine2('正在构建楼中楼...');
-            document.getElementById('m_pbtntop')?.remove();
-            document.getElementById('m_pbtnbtm')?.remove();
+            removeAllPaginationElements();
             
             setTimeout(() => {
                 try {
@@ -1440,8 +1539,7 @@
         
         if (isFirstConversion) {
             updateProgressLine2('正在构建楼中楼...');
-            document.getElementById('m_pbtntop')?.remove();
-            document.getElementById('m_pbtnbtm')?.remove();
+            removeAllPaginationElements();
             setTimeout(() => {
                 try {
                     enableThreadedView();
