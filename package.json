@@ -1,0 +1,23 @@
+{
+  "name": "nga-nested-replies",
+  "version": "2.2.0",
+  "description": "NGA楼中楼脚本 - Vite构建版",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:old": "node build.js"
+  },
+  "keywords": [
+    "NGA",
+    "userscript",
+    "tampermonkey",
+    "nested-replies"
+  ],
+  "author": "cloud_rider",
+  "license": "MIT",
+  "devDependencies": {
+    "vite": "^7.2.2",
+    "vite-plugin-monkey": "^7.1.5"
+  }
+}

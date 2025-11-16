@@ -1,24 +1,4 @@
-// ==UserScript==
-// @name         NGA 楼中楼（改进版）
-// @namespace    http://tampermonkey.net/
-// @version      2.1.0
-// @description  遍历帖子所有界面并自动展开折叠内容，然后重新组织为楼中楼形式。支持渐进式加载、智能缓存、配置管理
-// @author       cloud_rider
-// @match        https://bbs.nga.cn/read.php?tid=*
-// @match        https://ngabbs.com/read.php?tid=*
-// @match        https://nga.178.com/read.php?tid=*
-// @grant        GM_openInTab
-// @grant        GM_setValue
-// @grant        GM_getValue
-// @grant        GM_registerMenuCommand
-// @run-at       document-end
-// @license      MIT
-// @downloadURL https://update.greasyfork.org/scripts/554439/NGA%20%E6%A5%BC%E4%B8%AD%E6%A5%BC.user.js
-// @updateURL https://update.greasyfork.org/scripts/554439/NGA%20%E6%A5%BC%E4%B8%AD%E6%A5%BC.meta.js
-// ==/UserScript==
 
-(function() {
-    'use strict';
     console.log('[NGA 楼中楼] 脚本启动 v2.1.0');
 
     // ========== 配置管理模块 ==========
@@ -1797,4 +1777,4 @@
             console.error('[NGA 楼中楼] renderThreadedView 错误:', e);
         }
     }
-})();
+// 脚本已执行完成
