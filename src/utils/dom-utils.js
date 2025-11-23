@@ -12,33 +12,33 @@
  * @returns {HTMLElement}
  */
 export function createElement(tag, options = {}) {
-    const element = document.createElement(tag);
+  const element = document.createElement(tag);
 
-    if (options.attrs) {
-        for (const [key, value] of Object.entries(options.attrs)) {
-            element.setAttribute(key, value);
-        }
+  if (options.attrs) {
+    for (const [key, value] of Object.entries(options.attrs)) {
+      element.setAttribute(key, value);
     }
+  }
 
-    if (options.styles) {
-        for (const [key, value] of Object.entries(options.styles)) {
-            element.style[key] = value;
-        }
+  if (options.styles) {
+    for (const [key, value] of Object.entries(options.styles)) {
+      element.style[key] = value;
     }
+  }
 
-    if (options.className) {
-        element.className = options.className;
-    }
+  if (options.className) {
+    element.className = options.className;
+  }
 
-    if (options.textContent) {
-        element.textContent = options.textContent;
-    }
+  if (options.textContent) {
+    element.textContent = options.textContent;
+  }
 
-    if (options.innerHTML) {
-        element.innerHTML = options.innerHTML;
-    }
+  if (options.innerHTML) {
+    element.innerHTML = options.innerHTML;
+  }
 
-    return element;
+  return element;
 }
 
 /**
@@ -46,7 +46,7 @@ export function createElement(tag, options = {}) {
  * @returns {DocumentFragment}
  */
 export function createFragment() {
-    return document.createDocumentFragment();
+  return document.createDocumentFragment();
 }
 
 /**
@@ -55,13 +55,13 @@ export function createFragment() {
  * @param {Array<HTMLElement>} children - 子元素数组
  */
 export function batchAppend(parent, children) {
-    const fragment = createFragment();
-    children.forEach(child => {
-        if (child) {
-            fragment.appendChild(child);
-        }
-    });
-    parent.appendChild(fragment);
+  const fragment = createFragment();
+  children.forEach((child) => {
+    if (child) {
+      fragment.appendChild(child);
+    }
+  });
+  parent.appendChild(fragment);
 }
 
 /**
@@ -69,9 +69,9 @@ export function batchAppend(parent, children) {
  * @param {HTMLElement} element
  */
 export function removeElement(element) {
-    if (element && element.parentNode) {
-        element.parentNode.removeChild(element);
-    }
+  if (element && element.parentNode) {
+    element.parentNode.removeChild(element);
+  }
 }
 
 /**
@@ -80,9 +80,9 @@ export function removeElement(element) {
  * @param {string} className
  */
 export function addClass(element, className) {
-    if (element && className) {
-        element.classList.add(className);
-    }
+  if (element && className) {
+    element.classList.add(className);
+  }
 }
 
 /**
@@ -91,9 +91,9 @@ export function addClass(element, className) {
  * @param {string} className
  */
 export function removeClass(element, className) {
-    if (element && className) {
-        element.classList.remove(className);
-    }
+  if (element && className) {
+    element.classList.remove(className);
+  }
 }
 
 /**
@@ -103,10 +103,10 @@ export function removeClass(element, className) {
  * @returns {boolean} 是否添加了类
  */
 export function toggleClass(element, className) {
-    if (element && className) {
-        return element.classList.toggle(className);
-    }
-    return false;
+  if (element && className) {
+    return element.classList.toggle(className);
+  }
+  return false;
 }
 
 /**
@@ -115,11 +115,11 @@ export function toggleClass(element, className) {
  * @param {Object} styles - 样式对象
  */
 export function setStyles(element, styles) {
-    if (element && styles) {
-        for (const [key, value] of Object.entries(styles)) {
-            element.style[key] = value;
-        }
+  if (element && styles) {
+    for (const [key, value] of Object.entries(styles)) {
+      element.style[key] = value;
     }
+  }
 }
 
 /**
@@ -128,11 +128,11 @@ export function setStyles(element, styles) {
  * @param {Object} attrs - 属性对象
  */
 export function setAttributes(element, attrs) {
-    if (element && attrs) {
-        for (const [key, value] of Object.entries(attrs)) {
-            element.setAttribute(key, value);
-        }
+  if (element && attrs) {
+    for (const [key, value] of Object.entries(attrs)) {
+      element.setAttribute(key, value);
     }
+  }
 }
 
 /**
@@ -142,7 +142,7 @@ export function setAttributes(element, attrs) {
  * @returns {HTMLElement|null}
  */
 export function query(selector, context = document) {
-    return context.querySelector(selector);
+  return context.querySelector(selector);
 }
 
 /**
@@ -152,7 +152,7 @@ export function query(selector, context = document) {
  * @returns {NodeList}
  */
 export function queryAll(selector, context = document) {
-    return context.querySelectorAll(selector);
+  return context.querySelectorAll(selector);
 }
 
 /**
@@ -161,9 +161,9 @@ export function queryAll(selector, context = document) {
  * @param {string} display - 显示方式，默认 'block'
  */
 export function show(element, display = 'block') {
-    if (element) {
-        element.style.display = display;
-    }
+  if (element) {
+    element.style.display = display;
+  }
 }
 
 /**
@@ -171,9 +171,9 @@ export function show(element, display = 'block') {
  * @param {HTMLElement} element
  */
 export function hide(element) {
-    if (element) {
-        element.style.display = 'none';
-    }
+  if (element) {
+    element.style.display = 'none';
+  }
 }
 
 /**
@@ -183,16 +183,16 @@ export function hide(element) {
  * @returns {boolean} 是否显示
  */
 export function toggle(element, display = 'block') {
-    if (element) {
-        if (element.style.display === 'none') {
-            show(element, display);
-            return true;
-        } else {
-            hide(element);
-            return false;
-        }
+  if (element) {
+    if (element.style.display === 'none') {
+      show(element, display);
+      return true;
+    } else {
+      hide(element);
+      return false;
     }
-    return false;
+  }
+  return false;
 }
 
 /**
@@ -203,9 +203,9 @@ export function toggle(element, display = 'block') {
  * @param {Object} options
  */
 export function on(element, event, handler, options) {
-    if (element && event && handler) {
-        element.addEventListener(event, handler, options);
-    }
+  if (element && event && handler) {
+    element.addEventListener(event, handler, options);
+  }
 }
 
 /**
@@ -216,9 +216,9 @@ export function on(element, event, handler, options) {
  * @param {Object} options
  */
 export function off(element, event, handler, options) {
-    if (element && event && handler) {
-        element.removeEventListener(event, handler, options);
-    }
+  if (element && event && handler) {
+    element.removeEventListener(event, handler, options);
+  }
 }
 
 /**
@@ -226,9 +226,9 @@ export function off(element, event, handler, options) {
  * @param {HTMLElement} element
  */
 export function empty(element) {
-    if (element) {
-        element.innerHTML = '';
-    }
+  if (element) {
+    element.innerHTML = '';
+  }
 }
 
 /**
@@ -237,7 +237,7 @@ export function empty(element) {
  * @returns {DOMRect}
  */
 export function getRect(element) {
-    return element ? element.getBoundingClientRect() : null;
+  return element ? element.getBoundingClientRect() : null;
 }
 
 /**
@@ -245,8 +245,11 @@ export function getRect(element) {
  * @param {HTMLElement} element
  * @param {Object} options
  */
-export function scrollTo(element, options = { behavior: 'smooth', block: 'start' }) {
-    if (element) {
-        element.scrollIntoView(options);
-    }
+export function scrollTo(
+  element,
+  options = { behavior: 'smooth', block: 'start' }
+) {
+  if (element) {
+    element.scrollIntoView(options);
+  }
 }

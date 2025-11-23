@@ -1,278 +1,284 @@
 // ========== 楼中楼折叠组件 ==========
 
-import { createElement, addClass, removeClass, show, hide } from '../utils/dom-utils.js';
+import {
+  createElement,
+  addClass,
+  removeClass,
+  show,
+  hide,
+} from '../utils/dom-utils.js';
 
 /**
  * 楼中楼折叠组件
  */
 class ReplyCollapser {
-    constructor(storageManager, config) {
-        this.storageManager = storageManager;
-        this.config = config || {};
-        this.threshold = this.config.replyCollapseThreshold || 3;
-        this.enabled = this.config.enableReplyCollapse !== false;
-        this.expandedNodes = new Set(); // 当前展开的节点
+  constructor(storageManager, config) {
+    this.storageManager = storageManager;
+    this.config = config || {};
+    this.threshold = this.config.replyCollapseThreshold || 3;
+    this.enabled = this.config.enableReplyCollapse !== false;
+    this.expandedNodes = new Set(); // 当前展开的节点
+  }
+
+  /**
+   * 判断是否需要折叠
+   * @param {Object} node - 节点对象
+   * @param {number} level - 层级
+   * @returns {boolean}
+   */
+  shouldCollapse(node, level) {
+    if (!this.enabled) return false;
+    if (level <= 1) return false; // 主楼和一级回复不折叠
+    if (!node.children || node.children.length <= this.threshold) return false;
+    return true;
+  }
+
+  /**
+   * 创建折叠占位符
+   * @param {number} hiddenCount - 隐藏的回复数量
+   * @param {Function} onExpand - 展开回调
+   * @returns {HTMLElement}
+   */
+  createCollapsePlaceholder(hiddenCount, onExpand) {
+    const placeholder = createElement('div', {
+      className: 'nga-collapse-placeholder',
+      styles: {
+        background: '#F5F5F5',
+        border: '1px dashed #CCCCCC',
+        padding: '8px 12px',
+        margin: '8px 0',
+        borderRadius: '4px',
+        cursor: 'pointer',
+        transition: 'background 0.2s ease',
+        fontSize: '13px',
+        color: '#666',
+      },
+      innerHTML: `📦 还有 ${hiddenCount} 条回复被折叠 <span style="color: #3b82f6;">[点击展开]</span>`,
+    });
+
+    placeholder.addEventListener('mouseenter', () => {
+      placeholder.style.background = '#E5E7EB';
+    });
+
+    placeholder.addEventListener('mouseleave', () => {
+      placeholder.style.background = '#F5F5F5';
+    });
+
+    placeholder.addEventListener('click', onExpand);
+
+    return placeholder;
+  }
+
+  /**
+   * 创建收起按钮
+   * @param {Function} onCollapse - 收起回调
+   * @returns {HTMLElement}
+   */
+  createCollapseButton(onCollapse) {
+    const button = createElement('div', {
+      className: 'nga-collapse-button',
+      styles: {
+        background: '#E5E7EB',
+        border: '1px solid #D1D5DB',
+        padding: '4px 12px',
+        margin: '8px 0',
+        borderRadius: '4px',
+        cursor: 'pointer',
+        transition: 'background 0.2s ease',
+        fontSize: '12px',
+        color: '#666',
+        textAlign: 'center',
+      },
+      textContent: '收起',
+    });
+
+    button.addEventListener('mouseenter', () => {
+      button.style.background = '#D1D5DB';
+    });
+
+    button.addEventListener('mouseleave', () => {
+      button.style.background = '#E5E7EB';
+    });
+
+    button.addEventListener('click', onCollapse);
+
+    return button;
+  }
+
+  /**
+   * 应用折叠逻辑到节点
+   * @param {HTMLElement} container - 包含子回复的容器
+   * @param {Object} node - 节点数据
+   * @param {number} level - 层级
+   * @param {string} tid - 帖子 ID
+   */
+  applyCollapse(container, node, level, tid) {
+    if (!this.shouldCollapse(node, level)) {
+      return;
     }
 
-    /**
-     * 判断是否需要折叠
-     * @param {Object} node - 节点对象
-     * @param {number} level - 层级
-     * @returns {boolean}
-     */
-    shouldCollapse(node, level) {
-        if (!this.enabled) return false;
-        if (level <= 1) return false; // 主楼和一级回复不折叠
-        if (!node.children || node.children.length <= this.threshold) return false;
-        return true;
+    const children = Array.from(container.children);
+    const visibleCount = this.threshold;
+    const hiddenCount = children.length - visibleCount;
+
+    if (hiddenCount <= 0) return;
+
+    // 检查是否已展开
+    const nodeId = `${tid}_${node.floor}`;
+    const isExpanded = this.expandedNodes.has(nodeId);
+
+    if (!isExpanded) {
+      // 隐藏超出阈值的回复
+      for (let i = visibleCount; i < children.length; i++) {
+        addClass(children[i], 'nga-collapsed');
+        hide(children[i]);
+      }
+
+      // 插入折叠占位符
+      const placeholder = this.createCollapsePlaceholder(hiddenCount, () => {
+        this.expandNode(container, node, tid);
+        placeholder.remove();
+      });
+
+      container.insertBefore(placeholder, children[visibleCount]);
+    } else {
+      // 已展开，添加收起按钮
+      const button = this.createCollapseButton(() => {
+        this.collapseNode(container, node, tid);
+      });
+      container.appendChild(button);
+    }
+  }
+
+  /**
+   * 展开节点
+   * @param {HTMLElement} container
+   * @param {Object} node
+   * @param {string} tid
+   */
+  expandNode(container, node, tid) {
+    const children = Array.from(container.children);
+
+    // 显示所有隐藏的回复
+    children.forEach((child) => {
+      if (child.classList.contains('nga-collapsed')) {
+        removeClass(child, 'nga-collapsed');
+        show(child);
+
+        // 添加展开动画
+        child.style.animation = 'ngaFadeIn 0.3s ease';
+      }
+    });
+
+    // 移除折叠占位符
+    const placeholder = container.querySelector('.nga-collapse-placeholder');
+    if (placeholder) {
+      placeholder.remove();
     }
 
-    /**
-     * 创建折叠占位符
-     * @param {number} hiddenCount - 隐藏的回复数量
-     * @param {Function} onExpand - 展开回调
-     * @returns {HTMLElement}
-     */
-    createCollapsePlaceholder(hiddenCount, onExpand) {
-        const placeholder = createElement('div', {
-            className: 'nga-collapse-placeholder',
-            styles: {
-                background: '#F5F5F5',
-                border: '1px dashed #CCCCCC',
-                padding: '8px 12px',
-                margin: '8px 0',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                transition: 'background 0.2s ease',
-                fontSize: '13px',
-                color: '#666'
-            },
-            innerHTML: `📦 还有 ${hiddenCount} 条回复被折叠 <span style="color: #3b82f6;">[点击展开]</span>`
-        });
+    // 添加收起按钮
+    const button = this.createCollapseButton(() => {
+      this.collapseNode(container, node, tid);
+    });
+    container.appendChild(button);
 
-        placeholder.addEventListener('mouseenter', () => {
-            placeholder.style.background = '#E5E7EB';
-        });
+    // 记录展开状态
+    const nodeId = `${tid}_${node.floor}`;
+    this.expandedNodes.add(nodeId);
 
-        placeholder.addEventListener('mouseleave', () => {
-            placeholder.style.background = '#F5F5F5';
-        });
+    // 保存状态
+    this.saveState(tid);
+  }
 
-        placeholder.addEventListener('click', onExpand);
+  /**
+   * 折叠节点
+   * @param {HTMLElement} container
+   * @param {Object} node
+   * @param {string} tid
+   */
+  collapseNode(container, node, tid) {
+    const children = Array.from(container.children);
+    const visibleCount = this.threshold;
+    let hiddenCount = 0;
 
-        return placeholder;
+    // 隐藏超出阈值的回复
+    for (let i = visibleCount; i < children.length; i++) {
+      const child = children[i];
+      if (!child.classList.contains('nga-collapse-button')) {
+        addClass(child, 'nga-collapsed');
+        hide(child);
+        hiddenCount++;
+      }
     }
 
-    /**
-     * 创建收起按钮
-     * @param {Function} onCollapse - 收起回调
-     * @returns {HTMLElement}
-     */
-    createCollapseButton(onCollapse) {
-        const button = createElement('div', {
-            className: 'nga-collapse-button',
-            styles: {
-                background: '#E5E7EB',
-                border: '1px solid #D1D5DB',
-                padding: '4px 12px',
-                margin: '8px 0',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                transition: 'background 0.2s ease',
-                fontSize: '12px',
-                color: '#666',
-                textAlign: 'center'
-            },
-            textContent: '收起'
-        });
-
-        button.addEventListener('mouseenter', () => {
-            button.style.background = '#D1D5DB';
-        });
-
-        button.addEventListener('mouseleave', () => {
-            button.style.background = '#E5E7EB';
-        });
-
-        button.addEventListener('click', onCollapse);
-
-        return button;
+    // 移除收起按钮
+    const button = container.querySelector('.nga-collapse-button');
+    if (button) {
+      button.remove();
     }
 
-    /**
-     * 应用折叠逻辑到节点
-     * @param {HTMLElement} container - 包含子回复的容器
-     * @param {Object} node - 节点数据
-     * @param {number} level - 层级
-     * @param {string} tid - 帖子 ID
-     */
-    applyCollapse(container, node, level, tid) {
-        if (!this.shouldCollapse(node, level)) {
-            return;
-        }
+    // 添加折叠占位符
+    if (hiddenCount > 0) {
+      const placeholder = this.createCollapsePlaceholder(hiddenCount, () => {
+        this.expandNode(container, node, tid);
+        placeholder.remove();
+      });
 
-        const children = Array.from(container.children);
-        const visibleCount = this.threshold;
-        const hiddenCount = children.length - visibleCount;
-
-        if (hiddenCount <= 0) return;
-
-        // 检查是否已展开
-        const nodeId = `${tid}_${node.floor}`;
-        const isExpanded = this.expandedNodes.has(nodeId);
-
-        if (!isExpanded) {
-            // 隐藏超出阈值的回复
-            for (let i = visibleCount; i < children.length; i++) {
-                addClass(children[i], 'nga-collapsed');
-                hide(children[i]);
-            }
-
-            // 插入折叠占位符
-            const placeholder = this.createCollapsePlaceholder(hiddenCount, () => {
-                this.expandNode(container, node, tid);
-                placeholder.remove();
-            });
-
-            container.insertBefore(placeholder, children[visibleCount]);
-        } else {
-            // 已展开，添加收起按钮
-            const button = this.createCollapseButton(() => {
-                this.collapseNode(container, node, tid);
-            });
-            container.appendChild(button);
-        }
+      // 找到第一个被折叠的元素位置
+      let insertPos = visibleCount;
+      container.insertBefore(placeholder, children[insertPos]);
     }
 
-    /**
-     * 展开节点
-     * @param {HTMLElement} container
-     * @param {Object} node
-     * @param {string} tid
-     */
-    expandNode(container, node, tid) {
-        const children = Array.from(container.children);
-        
-        // 显示所有隐藏的回复
-        children.forEach(child => {
-            if (child.classList.contains('nga-collapsed')) {
-                removeClass(child, 'nga-collapsed');
-                show(child);
-                
-                // 添加展开动画
-                child.style.animation = 'ngaFadeIn 0.3s ease';
-            }
-        });
+    // 移除展开状态
+    const nodeId = `${tid}_${node.floor}`;
+    this.expandedNodes.delete(nodeId);
 
-        // 移除折叠占位符
-        const placeholder = container.querySelector('.nga-collapse-placeholder');
-        if (placeholder) {
-            placeholder.remove();
+    // 保存状态
+    this.saveState(tid);
+  }
+
+  /**
+   * 保存折叠状态
+   * @param {string} tid
+   */
+  async saveState(tid) {
+    if (this.storageManager) {
+      try {
+        await this.storageManager.saveCollapseState(tid, this.expandedNodes);
+      } catch (e) {
+        console.error('[ReplyCollapser] 保存状态失败:', e);
+      }
+    }
+  }
+
+  /**
+   * 加载折叠状态
+   * @param {string} tid
+   */
+  async loadState(tid) {
+    if (this.storageManager) {
+      try {
+        const state = await this.storageManager.getCollapseState(tid);
+        if (state) {
+          this.expandedNodes = state;
         }
+      } catch (e) {
+        console.error('[ReplyCollapser] 加载状态失败:', e);
+      }
+    }
+  }
 
-        // 添加收起按钮
-        const button = this.createCollapseButton(() => {
-            this.collapseNode(container, node, tid);
-        });
-        container.appendChild(button);
-
-        // 记录展开状态
-        const nodeId = `${tid}_${node.floor}`;
-        this.expandedNodes.add(nodeId);
-
-        // 保存状态
-        this.saveState(tid);
+  /**
+   * 注入折叠样式
+   */
+  static injectStyles() {
+    if (document.getElementById('nga-collapse-styles')) {
+      return;
     }
 
-    /**
-     * 折叠节点
-     * @param {HTMLElement} container
-     * @param {Object} node
-     * @param {string} tid
-     */
-    collapseNode(container, node, tid) {
-        const children = Array.from(container.children);
-        const visibleCount = this.threshold;
-        let hiddenCount = 0;
-
-        // 隐藏超出阈值的回复
-        for (let i = visibleCount; i < children.length; i++) {
-            const child = children[i];
-            if (!child.classList.contains('nga-collapse-button')) {
-                addClass(child, 'nga-collapsed');
-                hide(child);
-                hiddenCount++;
-            }
-        }
-
-        // 移除收起按钮
-        const button = container.querySelector('.nga-collapse-button');
-        if (button) {
-            button.remove();
-        }
-
-        // 添加折叠占位符
-        if (hiddenCount > 0) {
-            const placeholder = this.createCollapsePlaceholder(hiddenCount, () => {
-                this.expandNode(container, node, tid);
-                placeholder.remove();
-            });
-
-            // 找到第一个被折叠的元素位置
-            let insertPos = visibleCount;
-            container.insertBefore(placeholder, children[insertPos]);
-        }
-
-        // 移除展开状态
-        const nodeId = `${tid}_${node.floor}`;
-        this.expandedNodes.delete(nodeId);
-
-        // 保存状态
-        this.saveState(tid);
-    }
-
-    /**
-     * 保存折叠状态
-     * @param {string} tid
-     */
-    async saveState(tid) {
-        if (this.storageManager) {
-            try {
-                await this.storageManager.saveCollapseState(tid, this.expandedNodes);
-            } catch (e) {
-                console.error('[ReplyCollapser] 保存状态失败:', e);
-            }
-        }
-    }
-
-    /**
-     * 加载折叠状态
-     * @param {string} tid
-     */
-    async loadState(tid) {
-        if (this.storageManager) {
-            try {
-                const state = await this.storageManager.getCollapseState(tid);
-                if (state) {
-                    this.expandedNodes = state;
-                }
-            } catch (e) {
-                console.error('[ReplyCollapser] 加载状态失败:', e);
-            }
-        }
-    }
-
-    /**
-     * 注入折叠样式
-     */
-    static injectStyles() {
-        if (document.getElementById('nga-collapse-styles')) {
-            return;
-        }
-
-        const style = document.createElement('style');
-        style.id = 'nga-collapse-styles';
-        style.textContent = `
+    const style = document.createElement('style');
+    style.id = 'nga-collapse-styles';
+    style.textContent = `
             @keyframes ngaFadeIn {
                 from {
                     opacity: 0;
@@ -292,8 +298,8 @@ class ReplyCollapser {
                 background: #E5E7EB !important;
             }
         `;
-        document.head.appendChild(style);
-    }
+    document.head.appendChild(style);
+  }
 }
 
 // 注入样式

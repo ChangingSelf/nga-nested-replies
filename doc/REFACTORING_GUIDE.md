@@ -30,6 +30,7 @@ nga-nested-replies/
 ### 已提取的模块
 
 #### 1. utils/helpers.js - 工具函数模块
+
 - `formatSize(bytes)` - 格式化文件大小
 - `formatTime(timestamp)` - 格式化时间
 - `extractTid()` - 从URL提取tid
@@ -38,12 +39,14 @@ nga-nested-replies/
 - `throttle(fn, delay)` - 节流函数
 
 #### 2. storage/config.js - 配置管理模块
+
 - `ConfigManager` 类
   - `loadConfig()` - 加载配置
   - `saveConfig(newConfig)` - 保存配置
   - `getConfig()` - 获取配置
 
 #### 3. storage/cache.js - 缓存管理模块
+
 - `CacheManager` 类
   - `getMeta()` - 获取元数据
   - `saveMeta(meta)` - 保存元数据
@@ -57,6 +60,7 @@ nga-nested-replies/
     - `cleanOldestCache(maxSize)` - 清理旧缓存
 
 #### 4. ui/progress.js - 进度条UI模块
+
 - 进度条相关函数：
   - `createProgressBar()` - 创建进度条
   - `expandProgress()` - 展开进度条
@@ -80,16 +84,19 @@ nga-nested-replies/
 ### 如何打包
 
 #### 方式1：直接执行
+
 ```bash
 node build.js
 ```
 
 #### 方式2：使用npm（推荐）
+
 ```bash
 npm run build
 ```
 
 #### 输出结果
+
 - 生成文件：`nga-nested-replies.user.js`
 - 文件位置：项目根目录
 - 安装方式：在Tampermonkey中打开该文件并安装
@@ -130,12 +137,14 @@ npm run build
 ### 重构优势
 
 ✅ **已实现的优势**：
+
 1. 代码结构更清晰，职责分明
 2. 便于团队协作和代码审查
 3. 单个模块可独立测试
 4. 便于后续功能扩展
 
 ⏳ **后续优势**：
+
 1. 支持热重载开发（--watch模式）
 2. 可以逐步引入TypeScript
 3. 便于单元测试覆盖
@@ -193,5 +202,5 @@ A: 不可以。Tampermonkey要求单文件格式，必须打包后使用。
 
 ---
 
-*最后更新：2024-11-16*
-*维护者：cloud_rider*
+_最后更新：2024-11-16_
+_维护者：cloud_rider_

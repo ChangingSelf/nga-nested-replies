@@ -5,16 +5,19 @@
 ### 1. ✅ 刷新后楼层重复显示
 
 **问题原因：**
+
 - 从缓存加载时，未清空容器就直接追加内容
 - 导致页面原有内容 + 缓存内容重复显示
 
 **修复方案：**
+
 ```javascript
 // 在 loadFromCache 函数中添加
-container.innerHTML = '';  // 清空容器，避免重复
+container.innerHTML = ''; // 清空容器，避免重复
 ```
 
 **验证方法：**
+
 1. 首次打开帖子，等待加载完成
 2. 刷新页面
 3. 确认楼层不会重复显示
@@ -24,11 +27,13 @@ container.innerHTML = '';  // 清空容器，避免重复
 ### 2. ✅ 新增页面读取间隔配置
 
 **实现内容：**
+
 - 在默认配置中添加 `pageLoadInterval: 1000`（毫秒）
 - 在配置面板中添加设置项，范围：500-5000毫秒
 - 应用到所有页面加载的 `setInterval` 调用中
 
 **配置说明：**
+
 - **默认值**：1000毫秒（1秒）
 - **推荐值**：500-2000毫秒
 - **调整建议**：
@@ -36,6 +41,7 @@ container.innerHTML = '';  // 清空容器，避免重复
   - 网络慢或担心被限流：调高到2000-3000毫秒
 
 **使用方法：**
+
 1. 点击右下角⚙️图标
 2. 在"加载配置"中找到"页面读取间隔"
 3. 输入500-5000之间的数值（毫秒）
@@ -49,6 +55,7 @@ container.innerHTML = '';  // 清空容器，避免重复
 **问题原因分析：**
 
 #### 3.1 元数据未正确保存
+
 ```javascript
 // 问题代码
 cacheManager.savePageContent(info.currentPage, container.innerHTML);
@@ -57,33 +64,37 @@ loadedPages.add(info.currentPage);
 ```
 
 **修复：**
+
 ```javascript
 cacheManager.savePageContent(info.currentPage, container.innerHTML);
-cacheManager.saveMeta(meta);  // 添加元数据保存
+cacheManager.saveMeta(meta); // 添加元数据保存
 loadedPages.add(info.currentPage);
 ```
 
 #### 3.2 单页帖子处理缺失
+
 - 原代码只处理多页帖子
 - 单页帖子直接返回，未进行缓存和转换
 
 **修复：**
+
 ```javascript
 // 如果只有一页，直接转换
 if (info.totalPages === 1) {
-    updateProgressLine2('正在构建楼中楼...');
-    setTimeout(() => {
-        enableThreadedView();
-        if (!isLoaderTab) {
-            setTimeout(initScrollLoading, 1000);
-        }
-        setTimeout(removeProgressBar, 2000);
-    }, 500);
-    return;
+  updateProgressLine2('正在构建楼中楼...');
+  setTimeout(() => {
+    enableThreadedView();
+    if (!isLoaderTab) {
+      setTimeout(initScrollLoading, 1000);
+    }
+    setTimeout(removeProgressBar, 2000);
+  }, 500);
+  return;
 }
 ```
 
 **验证方法：**
+
 1. 清空所有缓存
 2. 打开一个帖子，等待完全加载
 3. 关闭标签页
@@ -98,6 +109,7 @@ if (info.totalPages === 1) {
 ## 测试清单
 
 ### 基础功能测试
+
 - [x] 首次打开帖子正常加载
 - [x] 缓存功能正常工作
 - [x] 刷新页面不出现重复内容
@@ -105,6 +117,7 @@ if (info.totalPages === 1) {
 - [x] 页面读取间隔配置生效
 
 ### 缓存测试
+
 - [x] 多页帖子缓存正常
 - [x] 单页帖子缓存正常
 - [x] 缓存命中后快速展示
@@ -112,12 +125,14 @@ if (info.totalPages === 1) {
 - [x] 手动清理缓存正常
 
 ### 性能测试
+
 - [x] 渐进式加载工作正常
 - [x] 后台预加载不影响阅读
 - [x] 滚动追加加载流畅
 - [x] 页面读取间隔可调
 
 ### 边界测试
+
 - [x] 单页帖子
 - [x] 超大帖子（100+页）
 - [x] 网络超时处理
@@ -130,6 +145,7 @@ if (info.totalPages === 1) {
 ### 不同场景推荐配置
 
 #### 快速浏览模式
+
 ```
 初始加载页数：3-5页
 预加载页数：5-10页
@@ -138,6 +154,7 @@ if (info.totalPages === 1) {
 ```
 
 #### 深度阅读模式
+
 ```
 初始加载页数：5-10页
 预加载页数：10-20页
@@ -146,6 +163,7 @@ if (info.totalPages === 1) {
 ```
 
 #### 慢速网络模式
+
 ```
 初始加载页数：3页
 预加载页数：5页
@@ -154,6 +172,7 @@ if (info.totalPages === 1) {
 ```
 
 #### 省流量模式
+
 ```
 初始加载页数：1-2页
 预加载页数：2-3页
@@ -184,6 +203,7 @@ if (info.totalPages === 1) {
 ### Q1: 缓存还是不起效怎么办？
 
 **检查步骤：**
+
 1. 打开浏览器控制台（F12）
 2. 切换到 Console 标签
 3. 打开帖子，查看日志输出
@@ -200,6 +220,7 @@ if (info.totalPages === 1) {
    ```
 
 **如果还是不行：**
+
 1. 点击配置面板的"缓存管理"标签
 2. 查看是否有缓存记录
 3. 尝试清空缓存后重新加载
@@ -207,6 +228,7 @@ if (info.totalPages === 1) {
 ### Q2: 页面读取间隔设置多少合适？
 
 **推荐设置：**
+
 - **500-800ms**：网速快，NGA响应快
 - **1000-1500ms**：正常网速（推荐）
 - **2000-3000ms**：网速慢或想降低服务器压力
@@ -229,13 +251,14 @@ if (info.totalPages === 1) {
 首次访问 → 加载页面 → 保存到缓存 → 转换显示
                 ↓
          保存元数据
-         
+
 再次访问 → 检查缓存 → 读取缓存 → 直接显示
                 ↓
          更新访问时间
 ```
 
 ### 元数据结构
+
 ```javascript
 {
     tid: "12345",
@@ -247,6 +270,7 @@ if (info.totalPages === 1) {
 ```
 
 ### 配置结构
+
 ```javascript
 {
     initialLoadPages: 5,
@@ -261,11 +285,13 @@ if (info.totalPages === 1) {
 ## 版本历史
 
 **v2.0.1 (2025-11-16)**
+
 - 修复三个关键bug
 - 新增页面读取间隔配置
 - 优化缓存可靠性
 
 **v2.0.0 (2025-11-16)**
+
 - 初始发布
 - 实现渐进式加载
 - 实现智能缓存系统
