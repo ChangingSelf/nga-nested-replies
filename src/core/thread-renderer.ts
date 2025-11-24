@@ -2,28 +2,40 @@
 
 import { measure } from '../utils/performance.js';
 import { createFragment } from '../utils/dom-utils.js';
+import type { AppConfig } from '../types/index.js';
+import StorageManager from '../storage/storage-manager.js';
 import ReplyCollapser from '../ui/reply-collapser.js';
+
+/**
+ * 帖子数据接口
+ */
+interface PostData {
+  element: HTMLTableElement;
+  pid: string;
+  floor: number;
+  children: PostData[];
+  parentFloor: number;
+  removeQuote?: boolean;
+}
 
 /**
  * 楼中楼渲染器
  * 将关系树渲染为楼中楼视图，应用样式和折叠逻辑
  */
 class ThreadRenderer {
-  constructor(config, storageManager) {
-    this.config = config || {};
-    this.storageManager = storageManager;
+  private config: AppConfig;
+  private replyCollapser: ReplyCollapser;
+
+  constructor(config: AppConfig, storageManager: StorageManager) {
+    this.config = config;
     this.replyCollapser = new ReplyCollapser(storageManager, config);
     this.injectStyles();
   }
 
   /**
    * 渲染楼中楼视图
-   * @param {Object} root - 根节点
-   * @param {HTMLElement} container - 容器元素
-   * @param {string} tid - 帖子 ID
-   * @returns {Promise<void>}
    */
-  async render(root, container, tid) {
+  async render(root: PostData, container: HTMLElement, tid: string): Promise<void> {
     return await measure('renderThreadedView', async () => {
       if (!root) {
         console.error('[ThreadRenderer] 根节点为空');
@@ -51,12 +63,13 @@ class ThreadRenderer {
 
   /**
    * 递归渲染节点
-   * @param {Object} node - 节点对象
-   * @param {DocumentFragment|HTMLElement} parent - 父容器
-   * @param {number} level - 层级
-   * @param {string} tid - 帖子 ID
    */
-  async renderNode(node, parent, level, tid) {
+  private async renderNode(
+    node: PostData,
+    parent: DocumentFragment | HTMLElement,
+    level: number,
+    tid: string
+  ): Promise<void> {
     if (!node || !node.element) return;
 
     // 创建包装器
@@ -70,7 +83,7 @@ class ThreadRenderer {
     wrapper.style.marginBottom = '8px';
 
     // 克隆帖子元素
-    const post = node.element.cloneNode(true);
+    const post = node.element.cloneNode(true) as HTMLTableElement;
 
     // 应用样式优化
     this.applyStyles(post, displayLevel);
@@ -110,10 +123,8 @@ class ThreadRenderer {
 
   /**
    * 应用样式类
-   * @param {HTMLElement} post
-   * @param {number} level
    */
-  applyStyles(post, level) {
+  private applyStyles(post: HTMLTableElement, level: number): void {
     if (level > 0) {
       post.classList.add('indented');
       post.classList.add(`nga-reply-level-${Math.min(level, 5)}`);
@@ -124,9 +135,8 @@ class ThreadRenderer {
 
   /**
    * 清理引用块
-   * @param {HTMLElement} post
    */
-  cleanupQuotes(post) {
+  private cleanupQuotes(post: HTMLTableElement): void {
     const quote = post.querySelector('div.quote');
     if (quote) {
       quote.remove();
@@ -135,15 +145,14 @@ class ThreadRenderer {
 
   /**
    * 优化楼中楼布局
-   * @param {HTMLElement} post
    */
-  optimizeLayout(post) {
+  private optimizeLayout(post: HTMLTableElement): void {
     // 简化左侧信息栏
-    const c1 = post.querySelector('td.c1');
+    const c1 = post.querySelector('td.c1') as HTMLTableDataCellElement;
     if (c1) {
       const info = c1.querySelector(
         'div[style*="text-align:left;line-height:1.5em"]'
-      );
+      ) as HTMLElement;
       if (info) {
         c1.innerHTML = '';
         c1.appendChild(info.cloneNode(true));
@@ -151,16 +160,16 @@ class ThreadRenderer {
     }
 
     // 简化右侧内容区
-    const c2 = post.querySelector('td.c2');
+    const c2 = post.querySelector('td.c2') as HTMLTableDataCellElement;
     if (c2) {
       // 隐藏不必要的元素
       const selectorsToHide = ['.goodbad', '[id^="postsubject"]', '.x'];
       selectorsToHide.forEach((selector) => {
-        const el = c2.querySelector(selector);
+        const el = c2.querySelector(selector) as HTMLElement;
         if (el) {
           if (
             selector.includes('postsubject') &&
-            el.textContent.trim() === ''
+            el.textContent?.trim() === ''
           ) {
             el.style.display = 'none';
           } else if (selector !== '.postInfo') {
@@ -170,14 +179,14 @@ class ThreadRenderer {
       });
 
       // 优化 postInfo 样式
-      const postInfo = c2.querySelector('.postInfo');
+      const postInfo = c2.querySelector('.postInfo') as HTMLElement;
       if (postInfo) {
         postInfo.style.lineHeight = '1.2';
         postInfo.style.margin = '2px 0';
       }
 
       // 优化内容区样式
-      const content = c2.querySelector('[id^="postcontent"]');
+      const content = c2.querySelector('[id^="postcontent"]') as HTMLElement;
       if (content) {
         content.style.margin = '4px 0';
         content.style.lineHeight = '1.45';
@@ -188,7 +197,7 @@ class ThreadRenderer {
   /**
    * 注入样式
    */
-  injectStyles() {
+  private injectStyles(): void {
     if (document.getElementById('nga-thread-renderer-styles')) {
       return;
     }
@@ -227,6 +236,30 @@ class ThreadRenderer {
             }
         `;
     document.head.appendChild(style);
+  }
+
+  /**
+   * 移除注入的样式
+   */
+  removeStyles(): void {
+    const style = document.getElementById('nga-thread-renderer-styles');
+    if (style) {
+      style.remove();
+    }
+  }
+
+  /**
+   * 获取渲染器配置
+   */
+  getConfig(): AppConfig {
+    return this.config;
+  }
+
+  /**
+   * 更新配置
+   */
+  updateConfig(newConfig: Partial<AppConfig>): void {
+    this.config = { ...this.config, ...newConfig };
   }
 }
 

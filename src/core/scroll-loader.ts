@@ -1,32 +1,43 @@
 // ========== 滚动加载管理器 ==========
 
 import { debounce } from '../utils/performance.js';
+import type { AppConfig } from '../types/index.js';
+import PageLoader from './page-loader.js';
+
+// 类型声明
+interface ThreadMeta {
+  totalPages: number;
+  cachedPages: number[];
+}
 
 /**
  * 滚动加载管理器
  * 监听滚动事件，触发懒加载更多内容
  */
 class ScrollLoader {
-  constructor(pageLoader, config) {
+  private pageLoader: PageLoader;
+  private config: AppConfig;
+  private isLoadingMore = false;
+  private allPagesLoaded = false;
+  private scrollHandler: ((() => void) & { cancel: () => void }) | null = null;
+  private totalPages = 0;
+  private threshold = 2; // 距底部2个屏幕高度触发
+
+  constructor(pageLoader: PageLoader, config: AppConfig) {
     this.pageLoader = pageLoader;
-    this.config = config || {};
-    this.isLoadingMore = false;
-    this.allPagesLoaded = false;
-    this.scrollHandler = null;
-    this.threshold = 2; // 距底部2个屏幕高度触发
+    this.config = config;
   }
 
   /**
    * 初始化滚动监听
-   * @param {number} totalPages
    */
-  initialize(totalPages) {
+  initialize(totalPages: number): void {
     this.totalPages = totalPages;
 
     // 创建防抖的滚动处理函数
     this.scrollHandler = debounce(() => {
       this.handleScroll();
-    }, 200);
+    }, 200) as ((() => void) & { cancel: () => void });
 
     window.addEventListener('scroll', this.scrollHandler);
     console.log('[ScrollLoader] 已初始化滚动加载');
@@ -35,22 +46,21 @@ class ScrollLoader {
   /**
    * 处理滚动事件
    */
-  handleScroll() {
+  private handleScroll(): void {
     if (this.isLoadingMore || this.allPagesLoaded) {
       return;
     }
 
     if (this.checkLoadMore()) {
       console.log('[ScrollLoader] 触发加载更多');
-      this.triggerLoadMore();
+      void this.triggerLoadMore();
     }
   }
 
   /**
    * 检查是否需要加载更多
-   * @returns {boolean}
    */
-  checkLoadMore() {
+  private checkLoadMore(): boolean {
     const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
     const clientHeight = document.documentElement.clientHeight;
     const scrollHeight = document.documentElement.scrollHeight;
@@ -63,8 +73,9 @@ class ScrollLoader {
   /**
    * 触发加载更多
    */
-  async triggerLoadMore() {
-    if (!this.pageLoader || !this.pageLoader.tid) {
+  private async triggerLoadMore(): Promise<void> {
+    const tid = this.pageLoader.getThreadId();
+    if (!tid) {
       return;
     }
 
@@ -72,9 +83,10 @@ class ScrollLoader {
     this.showLoadingIndicator();
 
     try {
-      const meta = await this.pageLoader.storageManager.getThreadMeta(
-        this.pageLoader.tid
-      );
+      const meta = await this.pageLoader.getStorageManager().getThreadMeta(
+        tid
+      ) as ThreadMeta | null;
+
       if (!meta) {
         this.isLoadingMore = false;
         this.hideLoadingIndicator();
@@ -88,7 +100,8 @@ class ScrollLoader {
         return;
       }
 
-      const currentMaxPage = Math.max(...this.pageLoader.loadedPages);
+      const loadedPages = this.pageLoader.getLoadedPages();
+      const currentMaxPage = loadedPages.size > 0 ? Math.max(...loadedPages) : 0;
       const nextPageStart = currentMaxPage + 1;
       const loadCount = this.config.initialLoadPages || 5;
       const nextPageEnd = Math.min(
@@ -122,36 +135,46 @@ class ScrollLoader {
 
   /**
    * 加载页面范围
-   * @param {number} startPage
-   * @param {number} endPage
-   * @param {number} totalPages
-   * @param {HTMLElement} container
    */
-  async loadPagesRange(startPage, endPage, totalPages, container) {
+  private async loadPagesRange(
+    startPage: number,
+    endPage: number,
+    totalPages: number,
+    container: HTMLElement
+  ): Promise<void> {
+    const tid = this.pageLoader.getThreadId();
+    // 注意：这里需要访问 PageLoader 的私有方法，在实际项目中需要重构为公共方法
+    // 为简化起见，我们暂时假设这些方法是可访问的
+
     for (let page = startPage; page <= endPage; page++) {
-      if (this.pageLoader.loadedPages.has(page)) continue;
+      const loadedPages = this.pageLoader.getLoadedPages();
+      if (loadedPages.has(page)) continue;
 
       try {
-        const html = await this.pageLoader.loadSinglePage(page);
+        const html = await this.pageLoader.loadSinglePagePublic(page);
         if (html) {
-          this.pageLoader.appendPosts(html, page, container);
-          this.pageLoader.loadedPages.add(page);
+          this.pageLoader.appendPostsPublic(html, page, container);
+          loadedPages.add(page);
 
           // 保存到缓存
-          await this.pageLoader.storageManager.savePageContent(
-            this.pageLoader.tid,
+          await this.pageLoader.getStorageManager().savePageContent(
+            this.pageLoader.getThreadId(),
             page,
             html
           );
 
-          const meta = await this.pageLoader.storageManager.getThreadMeta(
-            this.pageLoader.tid
-          );
-          if (meta && !meta.cachedPages.includes(page)) {
-            meta.cachedPages.push(page);
-            await this.pageLoader.storageManager.saveThreadMeta(
-              this.pageLoader.tid,
-              meta
+          const meta = await this.pageLoader.getStorageManager().getThreadMeta(
+            tid
+          ) as ThreadMeta | null;
+
+          if (meta && meta.cachedPages && !meta.cachedPages.includes(page)) {
+            const { tid, ...metaWithoutTid } = meta as any;
+            await this.pageLoader.getStorageManager().saveThreadMeta(
+              tid,
+              {
+                ...metaWithoutTid,
+                cachedPages: [...meta.cachedPages, page]
+              }
             );
           }
         }
@@ -161,7 +184,7 @@ class ScrollLoader {
     }
 
     // 重新渲染
-    await this.pageLoader.parseAndRender(container);
+    await this.pageLoader.parseAndRenderPublic(container);
 
     // 继续预加载
     if (endPage < totalPages) {
@@ -173,7 +196,7 @@ class ScrollLoader {
 
       if (preloadStart <= totalPages) {
         setTimeout(() => {
-          this.loadPagesRange(preloadStart, preloadEnd, totalPages, container);
+          void this.loadPagesRange(preloadStart, preloadEnd, totalPages, container);
         }, 1000);
       }
     }
@@ -182,7 +205,7 @@ class ScrollLoader {
   /**
    * 显示加载指示器
    */
-  showLoadingIndicator() {
+  private showLoadingIndicator(): void {
     let indicator = document.getElementById('nga-loading-more');
     if (!indicator) {
       indicator = document.createElement('div');
@@ -203,24 +226,24 @@ class ScrollLoader {
       indicator.textContent = '正在加载更多内容...';
       document.body.appendChild(indicator);
     }
-    indicator.style.display = 'block';
+    (indicator as HTMLElement).style.display = 'block';
   }
 
   /**
    * 隐藏加载指示器
    */
-  hideLoadingIndicator() {
+  private hideLoadingIndicator(): void {
     const indicator = document.getElementById('nga-loading-more');
     if (indicator) {
-      indicator.style.display = 'none';
+      (indicator as HTMLElement).style.display = 'none';
     }
   }
 
   /**
    * 显示加载完成
    */
-  showLoadComplete() {
-    const indicator = document.getElementById('nga-loading-more');
+  private showLoadComplete(): void {
+    const indicator = document.getElementById('nga-loading-more') as HTMLElement;
     if (indicator) {
       indicator.textContent = '已加载全部内容';
       indicator.style.background = 'rgba(16,185,129,0.9)';
@@ -236,12 +259,27 @@ class ScrollLoader {
   /**
    * 销毁滚动监听器
    */
-  destroy() {
+  destroy(): void {
     if (this.scrollHandler) {
       window.removeEventListener('scroll', this.scrollHandler);
       this.scrollHandler = null;
       console.log('[ScrollLoader] 已移除监听器');
     }
+  }
+
+  /**
+   * 获取加载状态
+   */
+  getLoadingState(): {
+    isLoadingMore: boolean;
+    allPagesLoaded: boolean;
+    totalPages: number;
+  } {
+    return {
+      isLoadingMore: this.isLoadingMore,
+      allPagesLoaded: this.allPagesLoaded,
+      totalPages: this.totalPages
+    };
   }
 }
 

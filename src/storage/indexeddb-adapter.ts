@@ -4,18 +4,21 @@
  * IndexedDB 适配器
  * 封装 IndexedDB 操作，提供 Promise 风格的 API
  */
+
+// 类型定义
+type StoreName = 'thread_meta' | 'page_content' | 'config' | 'collapse_state';
+type StoreMode = 'readonly' | 'readwrite';
+
 class IndexedDBAdapter {
-  constructor() {
-    this.dbName = 'NGA_Thread_Cache';
-    this.version = 1;
-    this.db = null;
-  }
+  private dbName = 'NGA_Thread_Cache';
+  private version = 1;
+  private db: IDBDatabase | null = null;
 
   /**
    * 打开数据库
-   * @returns {Promise<IDBDatabase>}
+   * @returns Promise<IDBDatabase>
    */
-  async openDatabase() {
+  async openDatabase(): Promise<IDBDatabase> {
     if (this.db) {
       return this.db;
     }
@@ -34,14 +37,14 @@ class IndexedDBAdapter {
         resolve(this.db);
       };
 
-      request.onupgradeneeded = (event) => {
+      request.onupgradeneeded = (event: IDBVersionChangeEvent) => {
         console.log(
           '[IndexedDB] 数据库升级，版本:',
           event.oldVersion,
           '->',
           event.newVersion
         );
-        const db = event.target.result;
+        const db = (event.target as IDBOpenDBRequest).result;
         this.createObjectStores(db);
       };
     });
@@ -49,9 +52,9 @@ class IndexedDBAdapter {
 
   /**
    * 创建对象存储和索引
-   * @param {IDBDatabase} db
+   * @param db
    */
-  createObjectStores(db) {
+  private createObjectStores(db: IDBDatabase): void {
     try {
       // 创建 thread_meta 存储
       if (!db.objectStoreNames.contains('thread_meta')) {
@@ -98,11 +101,14 @@ class IndexedDBAdapter {
 
   /**
    * 创建事务
-   * @param {string} storeName - 对象存储名称
-   * @param {string} mode - 事务模式 ('readonly' | 'readwrite')
-   * @returns {IDBObjectStore}
+   * @param storeName - 对象存储名称
+   * @param mode - 事务模式 ('readonly' | 'readwrite')
+   * @returns IDBObjectStore
    */
-  async getStore(storeName, mode = 'readonly') {
+  private async getStore(
+    storeName: StoreName,
+    mode: StoreMode = 'readonly'
+  ): Promise<IDBObjectStore> {
     const db = await this.openDatabase();
     const transaction = db.transaction(storeName, mode);
     return transaction.objectStore(storeName);
@@ -110,16 +116,16 @@ class IndexedDBAdapter {
 
   /**
    * 获取单条记录
-   * @param {string} storeName
-   * @param {any} key
-   * @returns {Promise<any>}
+   * @param storeName
+   * @param key
+   * @returns Promise<any>
    */
-  async get(storeName, key) {
+  async get<T>(storeName: StoreName, key: any): Promise<T | null> {
     try {
       const store = await this.getStore(storeName, 'readonly');
       return new Promise((resolve, reject) => {
         const request = store.get(key);
-        request.onsuccess = () => resolve(request.result);
+        request.onsuccess = () => resolve(request.result || null);
         request.onerror = () => reject(request.error);
       });
     } catch (e) {
@@ -130,10 +136,10 @@ class IndexedDBAdapter {
 
   /**
    * 获取所有记录
-   * @param {string} storeName
-   * @returns {Promise<Array>}
+   * @param storeName
+   * @returns Promise<Array>
    */
-  async getAll(storeName) {
+  async getAll<T>(storeName: StoreName): Promise<T[]> {
     try {
       const store = await this.getStore(storeName, 'readonly');
       return new Promise((resolve, reject) => {
@@ -149,12 +155,16 @@ class IndexedDBAdapter {
 
   /**
    * 按索引查询
-   * @param {string} storeName
-   * @param {string} indexName
-   * @param {any} query
-   * @returns {Promise<Array>}
+   * @param storeName
+   * @param indexName
+   * @param query
+   * @returns Promise<Array>
    */
-  async getByIndex(storeName, indexName, query) {
+  async getByIndex<T>(
+    storeName: StoreName,
+    indexName: string,
+    query: any
+  ): Promise<T[]> {
     try {
       const store = await this.getStore(storeName, 'readonly');
       const index = store.index(indexName);
@@ -174,11 +184,11 @@ class IndexedDBAdapter {
 
   /**
    * 添加记录
-   * @param {string} storeName
-   * @param {any} data
-   * @returns {Promise<void>}
+   * @param storeName
+   * @param data
+   * @returns Promise<void>
    */
-  async add(storeName, data) {
+  async add(storeName: StoreName, data: any): Promise<void> {
     try {
       const store = await this.getStore(storeName, 'readwrite');
       return new Promise((resolve, reject) => {
@@ -194,11 +204,11 @@ class IndexedDBAdapter {
 
   /**
    * 更新或添加记录
-   * @param {string} storeName
-   * @param {any} data
-   * @returns {Promise<void>}
+   * @param storeName
+   * @param data
+   * @returns Promise<void>
    */
-  async put(storeName, data) {
+  async put(storeName: StoreName, data: any): Promise<void> {
     try {
       const store = await this.getStore(storeName, 'readwrite');
       return new Promise((resolve, reject) => {
@@ -214,11 +224,11 @@ class IndexedDBAdapter {
 
   /**
    * 删除记录
-   * @param {string} storeName
-   * @param {any} key
-   * @returns {Promise<void>}
+   * @param storeName
+   * @param key
+   * @returns Promise<void>
    */
-  async delete(storeName, key) {
+  async delete(storeName: StoreName, key: any): Promise<void> {
     try {
       const store = await this.getStore(storeName, 'readwrite');
       return new Promise((resolve, reject) => {
@@ -234,10 +244,10 @@ class IndexedDBAdapter {
 
   /**
    * 清空对象存储
-   * @param {string} storeName
-   * @returns {Promise<void>}
+   * @param storeName
+   * @returns Promise<void>
    */
-  async clear(storeName) {
+  async clear(storeName: StoreName): Promise<void> {
     try {
       const store = await this.getStore(storeName, 'readwrite');
       return new Promise((resolve, reject) => {
@@ -253,10 +263,10 @@ class IndexedDBAdapter {
 
   /**
    * 统计记录数
-   * @param {string} storeName
-   * @returns {Promise<number>}
+   * @param storeName
+   * @returns Promise<number>
    */
-  async count(storeName) {
+  async count(storeName: StoreName): Promise<number> {
     try {
       const store = await this.getStore(storeName, 'readonly');
       return new Promise((resolve, reject) => {
@@ -272,11 +282,11 @@ class IndexedDBAdapter {
 
   /**
    * 批量写入（在同一事务中）
-   * @param {string} storeName
-   * @param {Array} dataArray
-   * @returns {Promise<void>}
+   * @param storeName
+   * @param dataArray
+   * @returns Promise<void>
    */
-  async batchPut(storeName, dataArray) {
+  async batchPut(storeName: StoreName, dataArray: any[]): Promise<void> {
     try {
       const db = await this.openDatabase();
       const transaction = db.transaction(storeName, 'readwrite');
@@ -298,10 +308,10 @@ class IndexedDBAdapter {
 
   /**
    * 获取所有键
-   * @param {string} storeName
-   * @returns {Promise<Array>}
+   * @param storeName
+   * @returns Promise<Array>
    */
-  async getAllKeys(storeName) {
+  async getAllKeys(storeName: StoreName): Promise<any[]> {
     try {
       const store = await this.getStore(storeName, 'readonly');
       return new Promise((resolve, reject) => {
@@ -317,16 +327,16 @@ class IndexedDBAdapter {
 
   /**
    * 检查 IndexedDB 是否可用
-   * @returns {boolean}
+   * @returns boolean
    */
-  static isAvailable() {
+  static isAvailable(): boolean {
     return typeof indexedDB !== 'undefined';
   }
 
   /**
    * 关闭数据库连接
    */
-  close() {
+  close(): void {
     if (this.db) {
       this.db.close();
       this.db = null;

@@ -1,21 +1,40 @@
 // ========== 配置面板 UI ==========
 
 import Toast from './toast.js';
+import type { AppConfig } from '../types/index.js';
+import ConfigManager from '../storage/config.js';
+import StorageManager from '../storage/storage-manager.js';
+
+/**
+ * 线程元数据接口
+ */
+interface ThreadMeta {
+  tid: string;
+  title?: string;
+  totalPages: number;
+  cachedPages: number[];
+  lastAccess: number;
+  cacheTime: number;
+  size?: number;
+}
 
 /**
  * 配置面板组件
  */
 class ConfigPanel {
-  constructor(configManager, storageManager) {
+  private configManager: ConfigManager;
+  private storageManager: StorageManager;
+  private panel: HTMLElement | null = null;
+
+  constructor(configManager: ConfigManager, storageManager: StorageManager) {
     this.configManager = configManager;
     this.storageManager = storageManager;
-    this.panel = null;
   }
 
   /**
    * 创建面板
    */
-  createPanel() {
+  private createPanel(): void {
     const overlay = document.createElement('div');
     overlay.style.cssText = `
             position: fixed;
@@ -51,42 +70,42 @@ class ConfigPanel {
                 <h2 style="margin: 0; font-size: 20px; color: #1f2937;">NGA 楼中楼配置</h2>
                 <p style="margin: 8px 0 0; color: #6b7280; font-size: 14px;">管理加载策略和缓存设置</p>
             </div>
-            
+
             <div style="padding: 0 24px;">
                 <div style="display: flex; border-bottom: 1px solid #e5e7eb; margin-bottom: 20px;">
                     <button class="tab-btn" data-tab="config" style="padding: 12px 20px; border: none; background: none; cursor: pointer; border-bottom: 2px solid #667eea; color: #667eea; font-weight: 600;">加载配置</button>
                     <button class="tab-btn" data-tab="cache" style="padding: 12px 20px; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; color: #6b7280;">缓存管理</button>
                 </div>
             </div>
-            
+
             <div id="config-tab" style="padding: 0 24px 24px;">
                 <div style="margin-bottom: 24px;">
                     <h3 style="margin: 0 0 16px; font-size: 16px; color: #374151;">加载配置</h3>
                     <div style="margin-bottom: 16px;">
                         <label style="display: block; margin-bottom: 8px; color: #4b5563; font-size: 14px;">初始加载页数</label>
-                        <input type="number" id="initialLoadPages" value="${config.initialLoadPages}" min="1" max="50" 
+                        <input type="number" id="initialLoadPages" value="${config.initialLoadPages}" min="1" max="50"
                             style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;" />
                         <small style="color: #6b7280; font-size: 12px;">达到此页数后立即开始转换展示（1-50）</small>
                     </div>
                     <div style="margin-bottom: 16px;">
                         <label style="display: block; margin-bottom: 8px; color: #4b5563; font-size: 14px;">预加载页数</label>
-                        <input type="number" id="preloadPages" value="${config.preloadPages}" min="0" max="100" 
+                        <input type="number" id="preloadPages" value="${config.preloadPages}" min="0" max="100"
                             style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;" />
                         <small style="color: #6b7280; font-size: 12px;">转换展示后继续后台加载的页数（0-100）</small>
                     </div>
                     <div style="margin-bottom: 16px;">
                         <label style="display: block; margin-bottom: 8px; color: #4b5563; font-size: 14px;">页面读取间隔（毫秒）</label>
-                        <input type="number" id="pageLoadInterval" value="${config.pageLoadInterval}" min="500" max="5000" step="100" 
+                        <input type="number" id="pageLoadInterval" value="${config.pageLoadInterval}" min="500" max="5000" step="100"
                             style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;" />
                         <small style="color: #6b7280; font-size: 12px;">每个页面读取的等待时间（500-5000毫秒）</small>
                     </div>
                 </div>
-                
+
                 <div style="margin-bottom: 24px;">
                     <h3 style="margin: 0 0 16px; font-size: 16px; color: #374151;">缓存配置</h3>
                     <div style="margin-bottom: 16px;">
                         <label style="display: block; margin-bottom: 8px; color: #4b5563; font-size: 14px;">缓存有效期</label>
-                        <select id="cacheExpireTime" 
+                        <select id="cacheExpireTime"
                             style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
                             <option value="3600000" ${config.cacheExpireTime === 3600000 ? 'selected' : ''}>1小时</option>
                             <option value="43200000" ${config.cacheExpireTime === 43200000 ? 'selected' : ''}>12小时</option>
@@ -98,7 +117,7 @@ class ConfigPanel {
                     </div>
                     <div style="margin-bottom: 16px;">
                         <label style="display: block; margin-bottom: 8px; color: #4b5563; font-size: 14px;">缓存容量限制（MB）</label>
-                        <select id="maxCacheSize" 
+                        <select id="maxCacheSize"
                             style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
                             <option value="${10 * 1024 * 1024}" ${config.maxCacheSize === 10 * 1024 * 1024 ? 'selected' : ''}>10 MB</option>
                             <option value="${30 * 1024 * 1024}" ${config.maxCacheSize === 30 * 1024 * 1024 ? 'selected' : ''}>30 MB</option>
@@ -109,7 +128,7 @@ class ConfigPanel {
                         <small style="color: #6b7280; font-size: 12px;">超出此容量后自动清理最旧的缓存</small>
                     </div>
                 </div>
-                
+
                 <div style="margin-bottom: 24px;">
                     <h3 style="margin: 0 0 16px; font-size: 16px; color: #374151;">性能优化</h3>
                     <div style="margin-bottom: 16px;">
@@ -122,24 +141,24 @@ class ConfigPanel {
                     </div>
                     <div style="margin-bottom: 16px;">
                         <label style="display: block; margin-bottom: 8px; color: #4b5563; font-size: 14px;">虚拟滚动缓冲区大小</label>
-                        <input type="number" id="virtualScrollBufferSize" value="${config.virtualScrollBufferSize || 10}" min="5" max="30" 
+                        <input type="number" id="virtualScrollBufferSize" value="${config.virtualScrollBufferSize || 10}" min="5" max="30"
                             style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;" />
                         <small style="color: #6b7280; font-size: 12px;">视口上下额外渲染的楼层数，越大滚动越流畅但内存占用越高（5-30）</small>
                     </div>
                 </div>
-                
+
                 <div style="display: flex; gap: 12px;">
-                    <button id="saveConfig" 
+                    <button id="saveConfig"
                         style="flex: 1; padding: 10px 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 6px; font-size: 14px; cursor: pointer; transition: opacity 0.2s;">
                         保存配置
                     </button>
-                    <button id="closePanel" 
+                    <button id="closePanel"
                         style="flex: 1; padding: 10px 20px; background: #e5e7eb; color: #374151; border: none; border-radius: 6px; font-size: 14px; cursor: pointer; transition: background 0.2s;">
                         关闭
                     </button>
                 </div>
             </div>
-            
+
             <div id="cache-tab" style="padding: 0 24px 24px; display: none;">
                 <div style="margin-bottom: 16px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
@@ -157,7 +176,7 @@ class ConfigPanel {
                     </div>
                 </div>
                 <div style="display: flex; gap: 12px;">
-                    <button id="closePanelCache" 
+                    <button id="closePanelCache"
                         style="flex: 1; padding: 10px 20px; background: #e5e7eb; color: #374151; border: none; border-radius: 6px; font-size: 14px; cursor: pointer; transition: background 0.2s;">
                         关闭
                     </button>
@@ -179,24 +198,26 @@ class ConfigPanel {
     const cacheTab = panel.querySelector('#cache-tab');
 
     tabBtns.forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const tab = btn.dataset.tab;
+      const button = btn as HTMLElement;
+      button.addEventListener('click', () => {
+        const tab = button.dataset.tab;
         tabBtns.forEach((b) => {
-          b.style.borderBottom = '2px solid transparent';
-          b.style.color = '#6b7280';
-          b.style.fontWeight = 'normal';
+          const tabButton = b as HTMLElement;
+          tabButton.style.borderBottom = '2px solid transparent';
+          tabButton.style.color = '#6b7280';
+          tabButton.style.fontWeight = 'normal';
         });
-        btn.style.borderBottom = '2px solid #667eea';
-        btn.style.color = '#667eea';
-        btn.style.fontWeight = '600';
+        button.style.borderBottom = '2px solid #667eea';
+        button.style.color = '#667eea';
+        button.style.fontWeight = '600';
 
         if (tab === 'config') {
-          configTab.style.display = 'block';
-          cacheTab.style.display = 'none';
+          (configTab as HTMLElement).style.display = 'block';
+          (cacheTab as HTMLElement).style.display = 'none';
         } else {
-          configTab.style.display = 'none';
-          cacheTab.style.display = 'block';
-          this.loadCacheList();
+          (configTab as HTMLElement).style.display = 'none';
+          (cacheTab as HTMLElement).style.display = 'block';
+          void this.loadCacheList();
         }
       });
     });
@@ -207,28 +228,28 @@ class ConfigPanel {
 
     panel
       .querySelector('#saveConfig')
-      .addEventListener('click', () => this.saveConfig(overlay));
+      ?.addEventListener('click', () => this.saveConfig(overlay));
     panel
       .querySelector('#closePanel')
-      .addEventListener('click', () => this.closePanel(overlay));
+      ?.addEventListener('click', () => this.closePanel(overlay));
     panel
       .querySelector('#closePanelCache')
-      .addEventListener('click', () => this.closePanel(overlay));
+      ?.addEventListener('click', () => this.closePanel(overlay));
     panel
       .querySelector('#refreshCache')
-      .addEventListener('click', () => this.loadCacheList());
+      ?.addEventListener('click', () => void this.loadCacheList());
     panel
       .querySelector('#clearAllCache')
-      .addEventListener('click', () => this.clearAllCaches());
+      ?.addEventListener('click', () => void this.clearAllCaches());
 
-    const saveBtn = panel.querySelector('#saveConfig');
+    const saveBtn = panel.querySelector('#saveConfig') as HTMLElement;
     saveBtn.addEventListener(
       'mouseenter',
       () => (saveBtn.style.opacity = '0.9')
     );
     saveBtn.addEventListener('mouseleave', () => (saveBtn.style.opacity = '1'));
 
-    const closeBtn = panel.querySelector('#closePanel');
+    const closeBtn = panel.querySelector('#closePanel') as HTMLElement;
     closeBtn.addEventListener(
       'mouseenter',
       () => (closeBtn.style.background = '#d1d5db')
@@ -244,7 +265,7 @@ class ConfigPanel {
   /**
    * 切换面板显示
    */
-  togglePanel() {
+  togglePanel(): void {
     if (this.panel) {
       this.closePanel(this.panel);
     } else {
@@ -255,9 +276,9 @@ class ConfigPanel {
   /**
    * 关闭面板
    */
-  closePanel(overlay) {
+  private closePanel(overlay: HTMLElement): void {
     overlay.style.opacity = '0';
-    overlay.querySelector('div').style.transform = 'translateY(-20px)';
+    (overlay.querySelector('div') as HTMLElement).style.transform = 'translateY(-20px)';
     setTimeout(() => {
       overlay.remove();
       this.panel = null;
@@ -267,26 +288,26 @@ class ConfigPanel {
   /**
    * 保存配置
    */
-  saveConfig(overlay) {
+  private saveConfig(overlay: HTMLElement): void {
     const initialLoadPages = parseInt(
-      document.getElementById('initialLoadPages').value
+      (document.getElementById('initialLoadPages') as HTMLInputElement).value
     );
     const preloadPages = parseInt(
-      document.getElementById('preloadPages').value
+      (document.getElementById('preloadPages') as HTMLInputElement).value
     );
     const cacheExpireTime = parseInt(
-      document.getElementById('cacheExpireTime').value
+      (document.getElementById('cacheExpireTime') as HTMLSelectElement).value
     );
     const pageLoadInterval = parseInt(
-      document.getElementById('pageLoadInterval').value
+      (document.getElementById('pageLoadInterval') as HTMLInputElement).value
     );
     const maxCacheSize = parseInt(
-      document.getElementById('maxCacheSize').value
+      (document.getElementById('maxCacheSize') as HTMLSelectElement).value
     );
     const useVirtualScroll =
-      document.getElementById('useVirtualScroll').checked;
+      (document.getElementById('useVirtualScroll') as HTMLInputElement).checked;
     const virtualScrollBufferSize = parseInt(
-      document.getElementById('virtualScrollBufferSize').value
+      (document.getElementById('virtualScrollBufferSize') as HTMLInputElement).value
     );
 
     if (initialLoadPages < 1 || initialLoadPages > 50) {
@@ -330,7 +351,7 @@ class ConfigPanel {
   /**
    * 加载缓存列表
    */
-  async loadCacheList() {
+  private async loadCacheList(): Promise<void> {
     try {
       const threadMetas = await this.storageManager.getAllCachedThreads();
       let totalSize = 0;
@@ -349,7 +370,7 @@ class ConfigPanel {
             }
           }
         }
-        meta.size = size;
+        (meta as ThreadMeta).size = size;
         totalSize += size;
       }
 
@@ -357,15 +378,15 @@ class ConfigPanel {
       threadMetas.sort((a, b) => b.lastAccess - a.lastAccess);
 
       // 更新统计信息
-      const statsDiv = document.getElementById('cache-stats');
+      const statsDiv = document.getElementById('cache-stats') as HTMLElement;
       if (statsDiv) {
         const config = this.configManager.getConfig();
         const maxSize = config.maxCacheSize;
         const usagePercent = ((totalSize / maxSize) * 100).toFixed(1);
         const progressColor =
-          usagePercent > 90
+          usagePercent && parseFloat(usagePercent) > 90
             ? '#ef4444'
-            : usagePercent > 70
+            : usagePercent && parseFloat(usagePercent) > 70
               ? '#f59e0b'
               : '#10b981';
 
@@ -376,7 +397,7 @@ class ConfigPanel {
                             <span>容量使用：<strong style="color: ${progressColor};">${this.formatSize(totalSize)}</strong> / ${this.formatSize(maxSize)}</span>
                         </div>
                         <div style="width: 100%; height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden;">
-                            <div style="width: ${Math.min(usagePercent, 100)}%; height: 100%; background: ${progressColor}; transition: width 0.3s ease;"></div>
+                            <div style="width: ${Math.min(parseFloat(usagePercent || '0'), 100)}%; height: 100%; background: ${progressColor}; transition: width 0.3s ease;"></div>
                         </div>
                         <div style="text-align: right; margin-top: 4px; font-size: 11px; color: #6b7280;">${usagePercent}% 已使用</div>
                     </div>
@@ -384,7 +405,7 @@ class ConfigPanel {
       }
 
       // 更新列表
-      const listDiv = document.getElementById('cache-list');
+      const listDiv = document.getElementById('cache-list') as HTMLElement;
       if (listDiv) {
         if (threadMetas.length === 0) {
           listDiv.innerHTML =
@@ -405,9 +426,9 @@ class ConfigPanel {
                                         <a href="https://bbs.nga.cn/read.php?tid=${item.tid}" target="_blank" style="color: #3b82f6; text-decoration: none;">${threadTitle}</a>
                                     </div>
                                     <div style="font-size: 12px; color: #6b7280;">
-                                        TID: ${item.tid} | 
-                                        页数：${item.cachedPages.length}/${item.totalPages} | 
-                                        大小：${this.formatSize(item.size)} | 
+                                        TID: ${item.tid} |
+                                        页数：${(item.cachedPages || []).length}/${item.totalPages || 0} |
+                                        大小：${this.formatSize((item as any).size || 0)} |
                                         最后访问：${lastAccessTime} |
                                         <span style="color: ${statusColor};">${statusText}</span>
                                     </div>
@@ -419,24 +440,27 @@ class ConfigPanel {
             .join('');
 
           listDiv.querySelectorAll('.delete-cache-btn').forEach((btn) => {
-            btn.addEventListener('click', (e) => {
-              const tid = e.target.dataset.tid;
-              this.deleteSingleCache(tid);
+            const button = btn as HTMLElement;
+            button.addEventListener('click', (e) => {
+              const tid = (e.target as HTMLElement).dataset.tid;
+              if (tid) {
+                void this.deleteSingleCache(tid);
+              }
             });
-            btn.addEventListener('mouseenter', () => {
-              btn.style.background = '#ef4444';
-              btn.style.color = 'white';
+            button.addEventListener('mouseenter', () => {
+              button.style.background = '#ef4444';
+              button.style.color = 'white';
             });
-            btn.addEventListener('mouseleave', () => {
-              btn.style.background = '#f3f4f6';
-              btn.style.color = '#374151';
+            button.addEventListener('mouseleave', () => {
+              button.style.background = '#f3f4f6';
+              button.style.color = '#374151';
             });
           });
         }
       }
     } catch (e) {
       console.error('[ConfigPanel] 加载缓存列表失败:', e);
-      const listDiv = document.getElementById('cache-list');
+      const listDiv = document.getElementById('cache-list') as HTMLElement;
       if (listDiv) {
         listDiv.innerHTML =
           '<div style="padding: 20px; text-align: center; color: #ef4444;">加载失败</div>';
@@ -447,13 +471,13 @@ class ConfigPanel {
   /**
    * 删除单个缓存
    */
-  async deleteSingleCache(tid) {
+  private async deleteSingleCache(tid: string): Promise<void> {
     if (!confirm(`确认删除帖子 #${tid} 的缓存？`)) return;
 
     try {
       await this.storageManager.clearThreadCache(tid);
       Toast.success('删除成功');
-      this.loadCacheList();
+      await this.loadCacheList();
     } catch (e) {
       console.error('[ConfigPanel] 删除失败:', e);
       Toast.error('删除失败');
@@ -463,7 +487,7 @@ class ConfigPanel {
   /**
    * 清空所有缓存
    */
-  async clearAllCaches() {
+  private async clearAllCaches(): Promise<void> {
     if (!confirm('确认清空所有缓存？此操作不可恢复！')) return;
 
     try {
@@ -476,7 +500,7 @@ class ConfigPanel {
       }
 
       Toast.success(`已清空 ${count} 个帖子缓存`);
-      this.loadCacheList();
+      await this.loadCacheList();
     } catch (e) {
       console.error('[ConfigPanel] 清空失败:', e);
       Toast.error('清空失败');
@@ -486,7 +510,7 @@ class ConfigPanel {
   /**
    * 格式化大小
    */
-  formatSize(bytes) {
+  private formatSize(bytes: number): string {
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
     return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
@@ -495,7 +519,7 @@ class ConfigPanel {
   /**
    * 格式化时间
    */
-  formatTime(timestamp) {
+  private formatTime(timestamp: number): string {
     const now = Date.now();
     const diff = now - timestamp;
     const minutes = Math.floor(diff / 60000);
@@ -511,11 +535,25 @@ class ConfigPanel {
   /**
    * 检查缓存是否有效
    */
-  isCacheValid(meta) {
+  private isCacheValid(meta: any): boolean {
     const config = this.configManager.getConfig();
     if (config.cacheExpireTime === -1) return true;
     const now = Date.now();
     return now - meta.lastAccess < config.cacheExpireTime;
+  }
+
+  /**
+   * 获取当前配置
+   */
+  getConfig(): AppConfig {
+    return this.configManager.getConfig();
+  }
+
+  /**
+   * 更新配置管理器
+   */
+  updateConfigManager(configManager: ConfigManager): void {
+    this.configManager = configManager;
   }
 }
 

@@ -4,7 +4,7 @@ import monkey from 'vite-plugin-monkey';
 export default defineConfig({
   plugins: [
     monkey({
-      entry: 'src/index.js',
+      entry: 'src/index.ts',
       userscript: {
         name: 'NGA 楼中楼（改进版）',
         namespace: 'http://tampermonkey.net/',
@@ -38,5 +38,8 @@ export default defineConfig({
   build: {
     minify: false, // 不压缩，保持代码可读性
     target: 'esnext',
+    rollupOptions: {
+      treeshake: false, // 禁用tree-shaking以确保所有代码都被打包
+    },
   },
 });

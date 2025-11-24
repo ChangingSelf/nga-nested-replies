@@ -2,10 +2,10 @@
 
 /**
  * 格式化文件大小
- * @param {number} bytes - 字节数
- * @returns {string} 格式化后的大小字符串
+ * @param bytes - 字节数
+ * @returns 格式化后的大小字符串
  */
-export function formatSize(bytes) {
+export function formatSize(bytes: number): string {
   if (bytes < 1024) return bytes + ' B';
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
   return (bytes / 1024 / 1024).toFixed(2) + ' MB';
@@ -13,13 +13,13 @@ export function formatSize(bytes) {
 
 /**
  * 格式化时间
- * @param {number} timestamp - 时间戳
- * @returns {string} 格式化后的时间字符串
+ * @param timestamp - 时间戳
+ * @returns 格式化后的时间字符串
  */
-export function formatTime(timestamp) {
+export function formatTime(timestamp: number): string {
   const date = new Date(timestamp);
   const now = new Date();
-  const diff = now - date;
+  const diff = now.getTime() - date.getTime();
 
   if (diff < 60000) return '刚刚';
   if (diff < 3600000) return Math.floor(diff / 60000) + '分钟前';
@@ -37,9 +37,9 @@ export function formatTime(timestamp) {
 
 /**
  * 从URL提取tid
- * @returns {string|null} tid或null
+ * @returns tid或null
  */
-export function extractTid() {
+export function extractTid(): string | null {
   const urlParams = new URLSearchParams(window.location.search);
   const tid = urlParams.get('tid');
   return tid;
@@ -47,22 +47,25 @@ export function extractTid() {
 
 /**
  * 等待指定时间
- * @param {number} ms - 毫秒数
- * @returns {Promise} Promise对象
+ * @param ms - 毫秒数
+ * @returns Promise对象
  */
-export function sleep(ms) {
+export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
  * 防抖函数
- * @param {Function} fn - 要防抖的函数
- * @param {number} delay - 延迟时间(毫秒)
- * @returns {Function} 防抖后的函数
+ * @param fn - 要防抖的函数
+ * @param delay - 延迟时间(毫秒)
+ * @returns 防抖后的函数
  */
-export function debounce(fn, delay) {
-  let timer = null;
-  return function (...args) {
+export function debounce<T extends (...args: any[]) => any>(
+  fn: T,
+  delay: number
+): (...args: Parameters<T>) => void {
+  let timer: NodeJS.Timeout | null = null;
+  return function (this: any, ...args: Parameters<T>) {
     if (timer) clearTimeout(timer);
     timer = setTimeout(() => {
       fn.apply(this, args);
@@ -72,13 +75,16 @@ export function debounce(fn, delay) {
 
 /**
  * 节流函数
- * @param {Function} fn - 要节流的函数
- * @param {number} delay - 延迟时间(毫秒)
- * @returns {Function} 节流后的函数
+ * @param fn - 要节流的函数
+ * @param delay - 延迟时间(毫秒)
+ * @returns 节流后的函数
  */
-export function throttle(fn, delay) {
+export function throttle<T extends (...args: any[]) => any>(
+  fn: T,
+  delay: number
+): (...args: Parameters<T>) => void {
   let last = 0;
-  return function (...args) {
+  return function (this: any, ...args: Parameters<T>) {
     const now = Date.now();
     if (now - last >= delay) {
       last = now;

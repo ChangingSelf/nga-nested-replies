@@ -3,22 +3,57 @@
 import IndexedDBAdapter from './indexeddb-adapter.js';
 
 /**
+ * 线程元数据
+ */
+interface ThreadMeta {
+  tid: string;
+  title?: string;
+  totalPages?: number;
+  lastAccess: number;
+  cacheTime: number;
+  cachedPages?: number[];
+}
+
+/**
+ * 页面内容数据
+ */
+interface PageContent {
+  tid: string;
+  page: number;
+  rawHTML: string;
+  timestamp: number;
+}
+
+/**
+ * 配置数据
+ */
+interface ConfigData {
+  key: string;
+  value: any;
+}
+
+/**
+ * 折叠状态数据
+ */
+interface CollapseStateData {
+  tid: string;
+  expandedFloors: number[];
+}
+
+/**
  * 存储管理器
  * 统一存储接口，自动选择 IndexedDB 或 GM 存储
  */
 class StorageManager {
-  constructor() {
-    this.adapter = null;
-    this.useIndexedDB = false;
-    this.initialized = false;
-    this.metaCache = new Map(); // 内存缓存热数据
-  }
+  private adapter: IndexedDBAdapter | null = null;
+  private useIndexedDB = false;
+  private initialized = false;
+  private metaCache = new Map<string, ThreadMeta>(); // 内存缓存热数据
 
   /**
    * 初始化存储层
-   * @returns {Promise<void>}
    */
-  async initialize() {
+  async initialize(): Promise<void> {
     if (this.initialized) {
       return;
     }
@@ -57,9 +92,8 @@ class StorageManager {
 
   /**
    * 从 GM 存储迁移数据到 IndexedDB
-   * @returns {Promise<void>}
    */
-  async migrateFromGM() {
+  private async migrateFromGM(): Promise<void> {
     try {
       // 检查是否已经迁移过
       const migrated = await this.getConfig('_migrated_from_gm');
@@ -77,7 +111,7 @@ class StorageManager {
       }
 
       console.log('[StorageManager] 检测到 GM 旧数据，开始迁移...');
-      const tidList = JSON.parse(cacheIndexData);
+      const tidList = JSON.parse(cacheIndexData) as string[];
       let migratedCount = 0;
 
       for (const tid of tidList) {
@@ -86,8 +120,8 @@ class StorageManager {
           const metaKey = `NGA_THREAD_META_${tid}`;
           const metaData = GM_getValue(metaKey);
           if (metaData) {
-            const meta = JSON.parse(metaData);
-            await this.adapter.put('thread_meta', meta);
+            const meta = JSON.parse(metaData) as ThreadMeta;
+            await this.adapter!.put('thread_meta', meta);
 
             // 迁移页面内容
             if (meta.cachedPages && Array.isArray(meta.cachedPages)) {
@@ -95,8 +129,8 @@ class StorageManager {
                 const pageKey = `NGA_PAGE_CONTENT_${tid}_${page}`;
                 const pageData = GM_getValue(pageKey);
                 if (pageData) {
-                  const pageContent = JSON.parse(pageData);
-                  await this.adapter.put('page_content', {
+                  const pageContent = JSON.parse(pageData) as { rawHTML: string; timestamp: number };
+                  await this.adapter!.put('page_content', {
                     tid: tid,
                     page: page,
                     rawHTML: pageContent.rawHTML,
@@ -137,18 +171,16 @@ class StorageManager {
 
   /**
    * 获取帖子元数据
-   * @param {string} tid
-   * @returns {Promise<Object|null>}
    */
-  async getThreadMeta(tid) {
+  async getThreadMeta(tid: string): Promise<ThreadMeta | null> {
     // 先查内存缓存
     if (this.metaCache.has(tid)) {
-      return this.metaCache.get(tid);
+      return this.metaCache.get(tid)!;
     }
 
     if (this.useIndexedDB) {
       try {
-        const meta = await this.adapter.get('thread_meta', tid);
+        const meta = await this.adapter!.get<ThreadMeta>('thread_meta', tid);
         if (meta) {
           this.metaCache.set(tid, meta);
         }
@@ -167,15 +199,13 @@ class StorageManager {
 
   /**
    * 从 GM 存储获取元数据
-   * @param {string} tid
-   * @returns {Object|null}
    */
-  _getThreadMetaFromGM(tid) {
+  private _getThreadMetaFromGM(tid: string): ThreadMeta | null {
     try {
       const key = `NGA_THREAD_META_${tid}`;
       const data = GM_getValue(key);
       if (data) {
-        const meta = JSON.parse(data);
+        const meta = JSON.parse(data) as ThreadMeta;
         this.metaCache.set(tid, meta);
         return meta;
       }
@@ -187,43 +217,40 @@ class StorageManager {
 
   /**
    * 保存帖子元数据
-   * @param {string} tid
-   * @param {Object} meta
-   * @returns {Promise<void>}
    */
-  async saveThreadMeta(tid, meta) {
+  async saveThreadMeta(tid: string, meta: Omit<ThreadMeta, 'tid'>): Promise<void> {
+    const fullMeta: ThreadMeta = { tid, ...meta };
+
     // 更新内存缓存
-    this.metaCache.set(tid, meta);
+    this.metaCache.set(tid, fullMeta);
 
     if (this.useIndexedDB) {
       try {
-        await this.adapter.put('thread_meta', { tid, ...meta });
+        await this.adapter!.put('thread_meta', fullMeta);
       } catch (e) {
         console.error(
           '[StorageManager] IndexedDB 保存元数据失败，降级至 GM:',
           e
         );
-        this._saveThreadMetaToGM(tid, meta);
+        this._saveThreadMetaToGM(tid, fullMeta);
       }
     } else {
-      this._saveThreadMetaToGM(tid, meta);
+      this._saveThreadMetaToGM(tid, fullMeta);
     }
   }
 
   /**
    * 保存元数据到 GM
-   * @param {string} tid
-   * @param {Object} meta
    */
-  _saveThreadMetaToGM(tid, meta) {
+  private _saveThreadMetaToGM(tid: string, meta: ThreadMeta): void {
     try {
       const key = `NGA_THREAD_META_${tid}`;
-      GM_setValue(key, JSON.stringify({ tid, ...meta }));
+      GM_setValue(key, JSON.stringify(meta));
 
       // 更新索引
       const indexKey = 'NGA_CACHE_INDEX';
       const indexData = GM_getValue(indexKey);
-      let tidList = indexData ? JSON.parse(indexData) : [];
+      let tidList = indexData ? JSON.parse(indexData) as string[] : [];
       if (!tidList.includes(tid)) {
         tidList.push(tid);
         GM_setValue(indexKey, JSON.stringify(tidList));
@@ -235,14 +262,11 @@ class StorageManager {
 
   /**
    * 获取页面内容
-   * @param {string} tid
-   * @param {number} page
-   * @returns {Promise<Object|null>}
    */
-  async getPageContent(tid, page) {
+  async getPageContent(tid: string, page: number): Promise<PageContent | null> {
     if (this.useIndexedDB) {
       try {
-        return await this.adapter.get('page_content', [tid, page]);
+        return await this.adapter!.get<PageContent>('page_content', [tid, page]);
       } catch (e) {
         console.error(
           '[StorageManager] IndexedDB 读取页面内容失败，降级至 GM:',
@@ -257,15 +281,12 @@ class StorageManager {
 
   /**
    * 从 GM 获取页面内容
-   * @param {string} tid
-   * @param {number} page
-   * @returns {Object|null}
    */
-  _getPageContentFromGM(tid, page) {
+  private _getPageContentFromGM(tid: string, page: number): PageContent | null {
     try {
       const key = `NGA_PAGE_CONTENT_${tid}_${page}`;
       const data = GM_getValue(key);
-      return data ? JSON.parse(data) : null;
+      return data ? (JSON.parse(data) as PageContent) : null;
     } catch (e) {
       console.error('[StorageManager] GM 读取页面内容失败:', e);
       return null;
@@ -274,13 +295,9 @@ class StorageManager {
 
   /**
    * 保存页面内容
-   * @param {string} tid
-   * @param {number} page
-   * @param {string} rawHTML
-   * @returns {Promise<void>}
    */
-  async savePageContent(tid, page, rawHTML) {
-    const data = {
+  async savePageContent(tid: string, page: number, rawHTML: string): Promise<void> {
+    const data: PageContent = {
       tid,
       page,
       rawHTML,
@@ -289,7 +306,7 @@ class StorageManager {
 
     if (this.useIndexedDB) {
       try {
-        await this.adapter.put('page_content', data);
+        await this.adapter!.put('page_content', data);
       } catch (e) {
         console.error(
           '[StorageManager] IndexedDB 保存页面内容失败，降级至 GM:',
@@ -304,11 +321,8 @@ class StorageManager {
 
   /**
    * 保存页面内容到 GM
-   * @param {string} tid
-   * @param {number} page
-   * @param {Object} data
    */
-  _savePageContentToGM(tid, page, data) {
+  private _savePageContentToGM(tid: string, page: number, data: PageContent): void {
     try {
       const key = `NGA_PAGE_CONTENT_${tid}_${page}`;
       GM_setValue(key, JSON.stringify(data));
@@ -319,25 +333,23 @@ class StorageManager {
 
   /**
    * 清除指定帖子的缓存
-   * @param {string} tid
-   * @returns {Promise<void>}
    */
-  async clearThreadCache(tid) {
+  async clearThreadCache(tid: string): Promise<void> {
     // 清除内存缓存
     this.metaCache.delete(tid);
 
     if (this.useIndexedDB) {
       try {
         // 获取元数据以找到所有缓存页
-        const meta = await this.adapter.get('thread_meta', tid);
+        const meta = await this.adapter!.get<ThreadMeta>('thread_meta', tid);
         if (meta && meta.cachedPages) {
           // 删除所有页面内容
           for (const page of meta.cachedPages) {
-            await this.adapter.delete('page_content', [tid, page]);
+            await this.adapter!.delete('page_content', [tid, page]);
           }
         }
         // 删除元数据
-        await this.adapter.delete('thread_meta', tid);
+        await this.adapter!.delete('thread_meta', tid);
       } catch (e) {
         console.error('[StorageManager] IndexedDB 清除缓存失败，降级至 GM:', e);
         this._clearThreadCacheFromGM(tid);
@@ -349,14 +361,13 @@ class StorageManager {
 
   /**
    * 从 GM 清除缓存
-   * @param {string} tid
    */
-  _clearThreadCacheFromGM(tid) {
+  private _clearThreadCacheFromGM(tid: string): void {
     try {
       const metaKey = `NGA_THREAD_META_${tid}`;
       const metaData = GM_getValue(metaKey);
       if (metaData) {
-        const meta = JSON.parse(metaData);
+        const meta = JSON.parse(metaData) as ThreadMeta;
         if (meta.cachedPages) {
           meta.cachedPages.forEach((page) => {
             GM_setValue(`NGA_PAGE_CONTENT_${tid}_${page}`, null);
@@ -369,7 +380,7 @@ class StorageManager {
       const indexKey = 'NGA_CACHE_INDEX';
       const indexData = GM_getValue(indexKey);
       if (indexData) {
-        let tidList = JSON.parse(indexData);
+        let tidList = JSON.parse(indexData) as string[];
         tidList = tidList.filter((t) => t !== tid);
         GM_setValue(indexKey, JSON.stringify(tidList));
       }
@@ -380,12 +391,11 @@ class StorageManager {
 
   /**
    * 获取所有缓存的帖子列表
-   * @returns {Promise<Array>}
    */
-  async getAllCachedThreads() {
+  async getAllCachedThreads(): Promise<ThreadMeta[]> {
     if (this.useIndexedDB) {
       try {
-        return await this.adapter.getAll('thread_meta');
+        return await this.adapter!.getAll<ThreadMeta>('thread_meta');
       } catch (e) {
         console.error(
           '[StorageManager] IndexedDB 获取缓存列表失败，降级至 GM:',
@@ -400,16 +410,15 @@ class StorageManager {
 
   /**
    * 从 GM 获取所有缓存帖子
-   * @returns {Array}
    */
-  _getAllCachedThreadsFromGM() {
+  private _getAllCachedThreadsFromGM(): ThreadMeta[] {
     try {
       const indexKey = 'NGA_CACHE_INDEX';
       const indexData = GM_getValue(indexKey);
       if (!indexData) return [];
 
-      const tidList = JSON.parse(indexData);
-      const threads = [];
+      const tidList = JSON.parse(indexData) as string[];
+      const threads: ThreadMeta[] = [];
 
       for (const tid of tidList) {
         const meta = this._getThreadMetaFromGM(tid);
@@ -427,9 +436,8 @@ class StorageManager {
 
   /**
    * 获取缓存总大小（估算）
-   * @returns {Promise<number>}
    */
-  async getCacheSize() {
+  async getCacheSize(): Promise<number> {
     const threads = await this.getAllCachedThreads();
     let totalSize = 0;
 
@@ -451,10 +459,8 @@ class StorageManager {
 
   /**
    * 清理旧缓存
-   * @param {number} maxSize - 最大缓存大小（字节）
-   * @returns {Promise<void>}
    */
-  async cleanOldCache(maxSize) {
+  async cleanOldCache(maxSize: number): Promise<void> {
     try {
       const threads = await this.getAllCachedThreads();
 
@@ -496,13 +502,11 @@ class StorageManager {
 
   /**
    * 获取配置项
-   * @param {string} key
-   * @returns {Promise<any>}
    */
-  async getConfig(key) {
+  async getConfig(key: string): Promise<any> {
     if (this.useIndexedDB) {
       try {
-        const result = await this.adapter.get('config', key);
+        const result = await this.adapter!.get<ConfigData>('config', key);
         return result ? result.value : null;
       } catch (e) {
         console.error('[StorageManager] IndexedDB 读取配置失败，降级至 GM:', e);
@@ -515,14 +519,11 @@ class StorageManager {
 
   /**
    * 保存配置项
-   * @param {string} key
-   * @param {any} value
-   * @returns {Promise<void>}
    */
-  async saveConfig(key, value) {
+  async saveConfig(key: string, value: any): Promise<void> {
     if (this.useIndexedDB) {
       try {
-        await this.adapter.put('config', { key, value });
+        await this.adapter!.put('config', { key, value });
       } catch (e) {
         console.error('[StorageManager] IndexedDB 保存配置失败，降级至 GM:', e);
         GM_setValue(key, value);
@@ -534,13 +535,11 @@ class StorageManager {
 
   /**
    * 获取折叠状态
-   * @param {string} tid
-   * @returns {Promise<Set<number>|null>}
    */
-  async getCollapseState(tid) {
+  async getCollapseState(tid: string): Promise<Set<number> | null> {
     if (this.useIndexedDB) {
       try {
-        const result = await this.adapter.get('collapse_state', tid);
+        const result = await this.adapter!.get<CollapseStateData>('collapse_state', tid);
         return result ? new Set(result.expandedFloors) : null;
       } catch (e) {
         console.error('[StorageManager] 读取折叠状态失败:', e);
@@ -554,14 +553,11 @@ class StorageManager {
 
   /**
    * 保存折叠状态
-   * @param {string} tid
-   * @param {Set<number>} expandedFloors
-   * @returns {Promise<void>}
    */
-  async saveCollapseState(tid, expandedFloors) {
+  async saveCollapseState(tid: string, expandedFloors: Set<number>): Promise<void> {
     if (this.useIndexedDB) {
       try {
-        await this.adapter.put('collapse_state', {
+        await this.adapter!.put('collapse_state', {
           tid,
           expandedFloors: Array.from(expandedFloors),
         });
@@ -573,15 +569,27 @@ class StorageManager {
 
   /**
    * 更新最后访问时间
-   * @param {string} tid
-   * @returns {Promise<void>}
    */
-  async updateLastAccess(tid) {
+  async updateLastAccess(tid: string): Promise<void> {
     const meta = await this.getThreadMeta(tid);
     if (meta) {
       meta.lastAccess = Date.now();
       await this.saveThreadMeta(tid, meta);
     }
+  }
+
+  /**
+   * 获取存储适配器实例（用于调试）
+   */
+  getAdapter(): IndexedDBAdapter | null {
+    return this.adapter;
+  }
+
+  /**
+   * 检查是否使用 IndexedDB
+   */
+  isUsingIndexedDB(): boolean {
+    return this.useIndexedDB;
   }
 }
 

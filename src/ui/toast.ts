@@ -1,16 +1,21 @@
 // ========== Toast 提示组件 ==========
 
 /**
+ * Toast 消息类型
+ */
+type ToastType = 'info' | 'success' | 'error' | 'warning';
+
+/**
  * Toast 提示消息组件
  */
 class Toast {
   /**
    * 显示提示消息
-   * @param {string} message - 消息内容
-   * @param {string} type - 消息类型 ('info' | 'success' | 'error' | 'warning')
-   * @param {number} duration - 显示时长(毫秒)
+   * @param message - 消息内容
+   * @param type - 消息类型 ('info' | 'success' | 'error' | 'warning')
+   * @param duration - 显示时长(毫秒)
    */
-  static show(message, type = 'info', duration = 3000) {
+  static show(message: string, type: ToastType = 'info', duration: number = 3000): void {
     const toast = document.createElement('div');
 
     const bgColor =
@@ -58,37 +63,37 @@ class Toast {
 
   /**
    * 显示成功消息
-   * @param {string} message
-   * @param {number} duration
+   * @param message
+   * @param duration
    */
-  static success(message, duration = 3000) {
+  static success(message: string, duration: number = 3000): void {
     Toast.show(message, 'success', duration);
   }
 
   /**
    * 显示错误消息
-   * @param {string} message
-   * @param {number} duration
+   * @param message
+   * @param duration
    */
-  static error(message, duration = 3000) {
+  static error(message: string, duration: number = 3000): void {
     Toast.show(message, 'error', duration);
   }
 
   /**
    * 显示警告消息
-   * @param {string} message
-   * @param {number} duration
+   * @param message
+   * @param duration
    */
-  static warning(message, duration = 3000) {
+  static warning(message: string, duration: number = 3000): void {
     Toast.show(message, 'warning', duration);
   }
 
   /**
    * 显示信息消息
-   * @param {string} message
-   * @param {number} duration
+   * @param message
+   * @param duration
    */
-  static info(message, duration = 3000) {
+  static info(message: string, duration: number = 3000): void {
     Toast.show(message, 'info', duration);
   }
 }

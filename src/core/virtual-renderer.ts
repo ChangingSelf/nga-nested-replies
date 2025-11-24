@@ -1,48 +1,77 @@
 // ========== 虚拟滚动渲染器 ==========
 
-import { measure } from '../utils/performance.js';
-import { debounce } from '../utils/performance.js';
+import { measure, debounce } from '../utils/performance.js';
+import type { AppConfig } from '../types/index.js';
+import StorageManager from '../storage/storage-manager.js';
 import ReplyCollapser from '../ui/reply-collapser.js';
+
+/**
+ * 帖子数据接口
+ */
+interface PostData {
+  element: HTMLTableElement;
+  pid: string;
+  floor: number;
+  children: PostData[];
+  parentFloor: number;
+  removeQuote?: boolean;
+}
+
+/**
+ * 扁平化节点项
+ */
+interface FlattenedNodeItem {
+  index: number;
+  node: PostData;
+  level: number;
+  displayLevel: number;
+  height: number;
+}
+
+/**
+ * 渲染范围
+ */
+interface RenderRange {
+  start: number;
+  end: number;
+}
 
 /**
  * 虚拟滚动渲染器
  * 只渲染可见区域的楼层，大幅减少DOM节点数量
  */
 class VirtualRenderer {
-  constructor(config, storageManager) {
-    this.config = config || {};
-    this.storageManager = storageManager;
+  private replyCollapser: ReplyCollapser;
+
+  // 虚拟滚动配置
+  private bufferSize: number;
+
+  // 数据
+  private flattenedNodes: FlattenedNodeItem[] = []; // 扁平化的节点列表
+  private nodeHeights = new Map<number, number>(); // 记录实际高度
+  private renderedRange: RenderRange = { start: 0, end: 0 };
+
+  // 容器
+  private container: HTMLElement | null = null;
+  private scrollContainer: HTMLElement | null = null;
+  private contentContainer: HTMLElement | null = null;
+
+  // 滚动处理
+  private scrollHandler: ((() => void) & { cancel: () => void }) | null = null;
+
+  constructor(config: AppConfig, storageManager: StorageManager) {
     this.replyCollapser = new ReplyCollapser(storageManager, config);
 
     // 虚拟滚动配置
     this.bufferSize = config.virtualScrollBufferSize || 10; // 视口上下额外渲染的楼层数
-    this.itemHeight = 200; // 预估每个楼层的高度（像素）
-    this.viewportHeight = window.innerHeight;
-
-    // 数据
-    this.flattenedNodes = []; // 扁平化的节点列表
-    this.nodeHeights = new Map(); // 记录实际高度
-    this.renderedRange = { start: 0, end: 0 };
-
-    // 容器
-    this.container = null;
-    this.scrollContainer = null;
-    this.contentContainer = null;
-
-    // 滚动处理
-    this.scrollHandler = null;
 
     this.injectStyles();
   }
 
   /**
    * 渲染楼中楼视图（虚拟滚动）
-   * @param {Object} root - 根节点
-   * @param {HTMLElement} container - 容器元素
-   * @param {string} tid - 帖子 ID
-   * @returns {Promise<void>}
    */
-  async render(root, container, tid) {
+  async render(root: PostData, container: HTMLElement, tid: string): Promise<void> {
     return await measure('VirtualRenderer.render', async () => {
       if (!root) {
         console.error('[VirtualRenderer] 根节点为空');
@@ -50,7 +79,6 @@ class VirtualRenderer {
       }
 
       this.container = container;
-      this.tid = tid;
 
       // 加载折叠状态
       if (tid) {
@@ -79,11 +107,8 @@ class VirtualRenderer {
 
   /**
    * 扁平化节点树
-   * @param {Object} node - 节点
-   * @param {number} level - 层级
-   * @param {number} index - 索引
    */
-  flattenTree(node, level, index) {
+  private flattenTree(node: PostData, level: number, index: number): void {
     if (!node) return;
 
     // 计算显示层级
@@ -107,10 +132,8 @@ class VirtualRenderer {
 
   /**
    * 估算节点高度
-   * @param {number} level
-   * @returns {number}
    */
-  estimateHeight(level) {
+  private estimateHeight(level: number): number {
     // 主楼通常更高
     if (level === 0) return 300;
     // 嵌套层级越深，通常内容越少
@@ -120,7 +143,9 @@ class VirtualRenderer {
   /**
    * 设置滚动容器
    */
-  setupScrollContainer() {
+  private setupScrollContainer(): void {
+    if (!this.container) return;
+
     // 清空原容器
     this.container.innerHTML = '';
     this.container.style.position = 'relative';
@@ -150,7 +175,7 @@ class VirtualRenderer {
   /**
    * 更新可见项
    */
-  updateVisibleItems() {
+  private updateVisibleItems(): void {
     const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
     const viewportHeight = window.innerHeight;
 
@@ -168,16 +193,13 @@ class VirtualRenderer {
     this.renderedRange = { start, end };
 
     // 渲染可见范围的节点
-    this.renderVisibleNodes(start, end, scrollTop);
+    this.renderVisibleNodes(start, end);
   }
 
   /**
    * 计算可见范围
-   * @param {number} scrollTop
-   * @param {number} viewportHeight
-   * @returns {Object} { start, end }
    */
-  calculateVisibleRange(scrollTop, viewportHeight) {
+  private calculateVisibleRange(scrollTop: number, viewportHeight: number): RenderRange {
     let accumulatedHeight = 0;
     let start = 0;
     let end = this.flattenedNodes.length;
@@ -212,11 +234,10 @@ class VirtualRenderer {
 
   /**
    * 渲染可见节点
-   * @param {number} start
-   * @param {number} end
-   * @param {number} scrollTop
    */
-  renderVisibleNodes(start, end, scrollTop) {
+  private renderVisibleNodes(start: number, end: number): void {
+    if (!this.contentContainer) return;
+
     // 计算偏移量
     let offsetTop = 0;
     for (let i = 0; i < start; i++) {
@@ -255,10 +276,8 @@ class VirtualRenderer {
 
   /**
    * 渲染单个节点
-   * @param {Object} item - 扁平化的节点项
-   * @returns {HTMLElement}
    */
-  renderSingleNode(item) {
+  private renderSingleNode(item: FlattenedNodeItem): HTMLElement {
     const { node, displayLevel } = item;
 
     // 创建包装器
@@ -266,10 +285,10 @@ class VirtualRenderer {
     wrapper.className = 'nga-virtual-item';
     wrapper.style.marginLeft = `${displayLevel * 20}px`;
     wrapper.style.marginBottom = '8px';
-    wrapper.dataset.index = item.index;
+    (wrapper as any).dataset.index = item.index;
 
     // 克隆帖子元素
-    const post = node.element.cloneNode(true);
+    const post = node.element.cloneNode(true) as HTMLTableElement;
 
     // 应用样式
     this.applyStyles(post, displayLevel);
@@ -292,7 +311,9 @@ class VirtualRenderer {
   /**
    * 更新滚动容器高度
    */
-  updateScrollContainerHeight() {
+  private updateScrollContainerHeight(): void {
+    if (!this.scrollContainer) return;
+
     let totalHeight = 0;
     for (let i = 0; i < this.flattenedNodes.length; i++) {
       const item = this.flattenedNodes[i];
@@ -304,10 +325,10 @@ class VirtualRenderer {
   /**
    * 开始滚动监听
    */
-  startScrollListener() {
+  private startScrollListener(): void {
     this.scrollHandler = debounce(() => {
       this.updateVisibleItems();
-    }, 100);
+    }, 100) as ((() => void) & { cancel: () => void });
 
     window.addEventListener('scroll', this.scrollHandler);
     console.log('[VirtualRenderer] 滚动监听已启动');
@@ -316,7 +337,7 @@ class VirtualRenderer {
   /**
    * 停止滚动监听
    */
-  stopScrollListener() {
+  private stopScrollListener(): void {
     if (this.scrollHandler) {
       window.removeEventListener('scroll', this.scrollHandler);
       this.scrollHandler = null;
@@ -326,10 +347,8 @@ class VirtualRenderer {
 
   /**
    * 应用样式类
-   * @param {HTMLElement} post
-   * @param {number} level
    */
-  applyStyles(post, level) {
+  private applyStyles(post: HTMLTableElement, level: number): void {
     if (level > 0) {
       post.classList.add('indented');
       post.classList.add(`nga-reply-level-${Math.min(level, 5)}`);
@@ -340,9 +359,8 @@ class VirtualRenderer {
 
   /**
    * 清理引用块
-   * @param {HTMLElement} post
    */
-  cleanupQuotes(post) {
+  private cleanupQuotes(post: HTMLTableElement): void {
     const quote = post.querySelector('div.quote');
     if (quote) {
       quote.remove();
@@ -351,15 +369,14 @@ class VirtualRenderer {
 
   /**
    * 优化楼中楼布局
-   * @param {HTMLElement} post
    */
-  optimizeLayout(post) {
+  private optimizeLayout(post: HTMLTableElement): void {
     // 简化左侧信息栏
-    const c1 = post.querySelector('td.c1');
+    const c1 = post.querySelector('td.c1') as HTMLTableDataCellElement;
     if (c1) {
       const info = c1.querySelector(
         'div[style*="text-align:left;line-height:1.5em"]'
-      );
+      ) as HTMLElement;
       if (info) {
         c1.innerHTML = '';
         c1.appendChild(info.cloneNode(true));
@@ -367,15 +384,15 @@ class VirtualRenderer {
     }
 
     // 简化右侧内容区
-    const c2 = post.querySelector('td.c2');
+    const c2 = post.querySelector('td.c2') as HTMLTableDataCellElement;
     if (c2) {
       const selectorsToHide = ['.goodbad', '[id^="postsubject"]', '.x'];
       selectorsToHide.forEach((selector) => {
-        const el = c2.querySelector(selector);
+        const el = c2.querySelector(selector) as HTMLElement;
         if (el) {
           if (
             selector.includes('postsubject') &&
-            el.textContent.trim() === ''
+            el.textContent?.trim() === ''
           ) {
             el.style.display = 'none';
           } else if (selector !== '.postInfo') {
@@ -384,13 +401,13 @@ class VirtualRenderer {
         }
       });
 
-      const postInfo = c2.querySelector('.postInfo');
+      const postInfo = c2.querySelector('.postInfo') as HTMLElement;
       if (postInfo) {
         postInfo.style.lineHeight = '1.2';
         postInfo.style.margin = '2px 0';
       }
 
-      const content = c2.querySelector('[id^="postcontent"]');
+      const content = c2.querySelector('[id^="postcontent"]') as HTMLElement;
       if (content) {
         content.style.margin = '4px 0';
         content.style.lineHeight = '1.45';
@@ -401,7 +418,7 @@ class VirtualRenderer {
   /**
    * 注入样式
    */
-  injectStyles() {
+  private injectStyles(): void {
     if (document.getElementById('nga-virtual-renderer-styles')) {
       return;
     }
@@ -453,10 +470,32 @@ class VirtualRenderer {
   /**
    * 销毁渲染器
    */
-  destroy() {
+  destroy(): void {
     this.stopScrollListener();
     this.flattenedNodes = [];
     this.nodeHeights.clear();
+  }
+
+  /**
+   * 获取当前渲染状态
+   */
+  getRenderState(): {
+    totalNodes: number;
+    renderedRange: RenderRange;
+    bufferSize: number;
+  } {
+    return {
+      totalNodes: this.flattenedNodes.length,
+      renderedRange: this.renderedRange,
+      bufferSize: this.bufferSize
+    };
+  }
+
+  /**
+   * 手动更新可见项
+   */
+  forceUpdate(): void {
+    this.updateVisibleItems();
   }
 }
 

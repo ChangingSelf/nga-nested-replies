@@ -1,14 +1,13 @@
 // ========== NGA 楼中楼脚本 v2.2.0（重构版）==========
-
-console.log('[NGA 楼中楼] 脚本启动 v2.2.0');
-
-// 导入模块
-import StorageManager from './storage/storage-manager.js';
 import ConfigManager from './storage/config.js';
+import StorageManager from './storage/storage-manager.js';
 import PageLoader from './core/page-loader.js';
 import ScrollLoader from './core/scroll-loader.js';
 import ConfigPanel from './ui/config-panel.js';
 import Toast from './ui/toast.js';
+import type { PageInfo } from './types/index.js';
+
+console.log('[NGA 楼中楼] 脚本启动 v2.2.0');
 
 // ========== 工具函数 ==========
 
@@ -16,7 +15,7 @@ import Toast from './ui/toast.js';
  * 从 URL 提取 tid
  * @returns {string|null}
  */
-function extractTid() {
+function extractTid(): string | null {
   const urlParams = new URLSearchParams(window.location.search);
   const tidFromParam = urlParams.get('tid');
 
@@ -37,18 +36,18 @@ function extractTid() {
 
 /**
  * 解析页面信息
- * @returns {Object} { totalPages, currentPage }
+ * @returns {PageInfo}
  */
-function parsePageInfo() {
+function parsePageInfo(): PageInfo {
   try {
     const urlParams = new URLSearchParams(window.location.search);
     let totalPages = 1;
-    let currentPage = parseInt(urlParams.get('page')) || 1;
+    let currentPage = parseInt(urlParams.get('page') || '1');
 
     const links = document.querySelectorAll('#pagebtop a, #pagebbtm a');
     links.forEach((link) => {
-      const text = link.textContent.trim();
-      const num = parseInt(text);
+      const text = link.textContent?.trim();
+      const num = parseInt(text || '');
       if (!isNaN(num)) totalPages = Math.max(totalPages, num);
     });
 
@@ -56,7 +55,7 @@ function parsePageInfo() {
       '#pagebtop a[title*="最后页"], #pagebbtm a[title*="最后页"]'
     );
     if (lastPageLink) {
-      const match = lastPageLink.href.match(/page=(\d+)/);
+      const match = (lastPageLink as HTMLAnchorElement).href.match(/page=(\d+)/);
       if (match) {
         const lastPage = parseInt(match[1]);
         if (lastPage > totalPages) totalPages = lastPage;
@@ -75,11 +74,11 @@ function parsePageInfo() {
  * 展开所有折叠内容
  * @param {HTMLElement} container
  */
-function expandAllCollapses(container) {
+function expandAllCollapses(container: HTMLElement): void {
   try {
     const buttons = container.querySelectorAll(
       'button[name="collapseSwitchButton"]'
-    );
+    ) as NodeListOf<HTMLButtonElement>;
     console.log('[自动展开] 找到', buttons.length, '个折叠按钮');
 
     let expanded = 0;
@@ -92,11 +91,11 @@ function expandAllCollapses(container) {
         }
       } catch (e) {
         console.warn('[自动展开] 按钮点击失败:', e);
-        const collapseDiv = button.parentNode?.nextSibling;
+        const collapseDiv = button.parentNode?.nextSibling as HTMLElement;
         if (
           collapseDiv &&
           collapseDiv.classList.contains('collapse') &&
-          collapseDiv.style.display === 'none'
+          (collapseDiv.style.display === 'none' || !collapseDiv.style.display)
         ) {
           collapseDiv.style.display = 'block';
           button.textContent = '-';
@@ -113,12 +112,11 @@ function expandAllCollapses(container) {
 
 // ========== 进度条管理 ==========
 
-let progressBar = null;
-let progressLine2 = null;
-let isProgressExpanded = true;
+let progressBar: HTMLElement | null = null;
+let progressLine2: HTMLElement | null = null;
 let isProgressLoading = true;
 
-function createProgressBar() {
+function createProgressBar(): void {
   progressBar = document.createElement('div');
   progressBar.id = 'nga-progress-bar';
   progressBar.style.cssText = `
@@ -170,18 +168,20 @@ function createProgressBar() {
 
   progressBar.addEventListener('mouseenter', () => {
     if (!progressBar) return;
-    isProgressExpanded = true;
     progressBar.style.maxWidth = '350px';
-    document.getElementById('progress-compact').style.display = 'none';
-    document.getElementById('progress-expanded').style.display = 'block';
+    const compactIcon = document.getElementById('progress-compact');
+    const expandedContent = document.getElementById('progress-expanded');
+    if (compactIcon) compactIcon.style.display = 'none';
+    if (expandedContent) expandedContent.style.display = 'block';
   });
 
   progressBar.addEventListener('mouseleave', () => {
     if (!progressBar || isProgressLoading) return;
-    isProgressExpanded = false;
     progressBar.style.maxWidth = '50px';
-    document.getElementById('progress-compact').style.display = 'block';
-    document.getElementById('progress-expanded').style.display = 'none';
+    const compactIcon = document.getElementById('progress-compact');
+    const expandedContent = document.getElementById('progress-expanded');
+    if (compactIcon) compactIcon.style.display = 'block';
+    if (expandedContent) expandedContent.style.display = 'none';
   });
 
   progressBar.addEventListener('click', () => {
@@ -191,14 +191,14 @@ function createProgressBar() {
   });
 }
 
-function updateProgressLine2(text) {
+function updateProgressLine2(text: string): void {
   if (progressLine2) {
     progressLine2.textContent = text;
     isProgressLoading = !text.includes('完成') && !text.includes('错误');
   }
 }
 
-function updateProgressDetail(loaded, total, cached = 0) {
+function updateProgressDetail(loaded: number, total: number, cached: number = 0): void {
   const detailDiv = document.getElementById('progress-detail');
   if (detailDiv) {
     detailDiv.style.display = 'block';
@@ -211,14 +211,14 @@ function updateProgressDetail(loaded, total, cached = 0) {
 /**
  * 自动点击跳转链接
  */
-function autoClickJump() {
+function autoClickJump(): void {
   try {
     if (document.body.innerHTML.includes('访客不能直接访问')) {
       if (window.g) {
         window.g();
         return;
       }
-      const link = document.querySelector('a[onclick="g()"]');
+      const link = document.querySelector('a[onclick="g()"]') as HTMLAnchorElement;
       if (link) {
         link.click();
         setTimeout(extractPosts, 2000);
@@ -236,13 +236,13 @@ function autoClickJump() {
 /**
  * 设置反机器人 Cookie
  */
-function setAntiBotCookie() {
+function setAntiBotCookie(): void {
   try {
     const now = Date.now();
     document.cookie = `guestJs=${Math.floor(now / 1000)}_9c1cuj;domain=bbs.nga.cn;path=/;max-age=1800`;
     document.cookie = `lastpath=0;domain=bbs.nga.cn;path=/;max-age=0`;
     const url = new URL(window.location.href);
-    url.searchParams.set('rand', Math.floor(Math.random() * 1000));
+    url.searchParams.set('rand', Math.floor(Math.random() * 1000).toString());
     setTimeout(() => window.location.replace(url.toString()), 300);
   } catch (e) {
     console.error('[Loader] setAntiBotCookie 错误:', e);
@@ -252,7 +252,7 @@ function setAntiBotCookie() {
 /**
  * 提取帖子内容
  */
-function extractPosts() {
+function extractPosts(): void {
   try {
     const page = new URLSearchParams(window.location.search).get('page') || '1';
     const container = document.getElementById('m_posts_c');
@@ -272,7 +272,7 @@ function extractPosts() {
 
 // ========== 主程序初始化 ==========
 
-async function initializeApp() {
+async function initializeApp(): Promise<void> {
   try {
     // 检测运行环境
     const urlParams = new URLSearchParams(window.location.search);
@@ -346,7 +346,7 @@ async function initializeApp() {
           tid,
           storageManager,
           config,
-          (message, loaded, total) => {
+          (message: string, loaded: number, total: number) => {
             updateProgressLine2(message);
             updateProgressDetail(loaded, total);
           }

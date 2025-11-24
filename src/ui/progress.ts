@@ -1,13 +1,14 @@
 // ========== 进度条UI模块 ==========
 
-// 注意：这些全局变量在main.js中也需要声明一次，因为它们会在多个地方使用
-// 打包时会自动处理重复声明问题
-var progressBar = null;
-var progressLine2 = null;
-var isProgressExpanded = true;
-var isProgressLoading = true;
+// 进度条全局变量
+let progressBar: HTMLElement | null = null;
+let progressLine2: HTMLElement | null = null;
+let isProgressLoading = true;
 
-function createProgressBar() {
+/**
+ * 创建进度条
+ */
+function createProgressBar(): void {
   progressBar = document.createElement('div');
   progressBar.id = 'nga-progress-bar';
   progressBar.style.cssText = `
@@ -64,31 +65,45 @@ function createProgressBar() {
   progressBar.addEventListener('mouseleave', collapseProgress);
 }
 
-function expandProgress() {
+/**
+ * 展开进度条
+ */
+function expandProgress(): void {
   if (!progressBar) return;
-  isProgressExpanded = true;
   progressBar.style.maxWidth = '350px';
-  document.getElementById('progress-compact').style.display = 'none';
-  document.getElementById('progress-expanded').style.display = 'block';
+  const compactIcon = document.getElementById('progress-compact');
+  const expandedContent = document.getElementById('progress-expanded');
+  if (compactIcon) compactIcon.style.display = 'none';
+  if (expandedContent) expandedContent.style.display = 'block';
 }
 
-function collapseProgress() {
+/**
+ * 折叠进度条
+ */
+function collapseProgress(): void {
   if (!progressBar || isProgressLoading) return; // 加载中不自动折叠
-  isProgressExpanded = false;
   progressBar.style.maxWidth = '50px';
-  document.getElementById('progress-compact').style.display = 'block';
-  document.getElementById('progress-expanded').style.display = 'none';
+  const compactIcon = document.getElementById('progress-compact');
+  const expandedContent = document.getElementById('progress-expanded');
+  if (compactIcon) compactIcon.style.display = 'block';
+  if (expandedContent) expandedContent.style.display = 'none';
 }
 
-function updateProgressLine2(t) {
+/**
+ * 更新进度条第二行文字
+ */
+function updateProgressLine2(text: string): void {
   if (progressLine2) {
-    progressLine2.textContent = t;
+    progressLine2.textContent = text;
     // 检查是否完成加载
-    isProgressLoading = !t.includes('完成') && !t.includes('错误');
+    isProgressLoading = !text.includes('完成') && !text.includes('错误');
   }
 }
 
-function updateProgressDetail(loaded, total, cached = 0) {
+/**
+ * 更新进度详情
+ */
+function updateProgressDetail(loaded: number, total: number, cached: number = 0): void {
   const detailDiv = document.getElementById('progress-detail');
   if (detailDiv) {
     detailDiv.style.display = 'block';
@@ -96,14 +111,20 @@ function updateProgressDetail(loaded, total, cached = 0) {
   }
 }
 
-function hideProgressDetail() {
+/**
+ * 隐藏进度详情
+ */
+function hideProgressDetail(): void {
   const detailDiv = document.getElementById('progress-detail');
   if (detailDiv) {
     detailDiv.style.display = 'none';
   }
 }
 
-function removeProgressBar() {
+/**
+ * 移除进度条（实际上只是折叠并保持显示）
+ */
+function removeProgressBar(): void {
   if (progressBar) {
     isProgressLoading = false;
     // 加载完成后保持显示并自动折叠
@@ -111,3 +132,13 @@ function removeProgressBar() {
     // 不自动移除，让用户可以看到最终状态
   }
 }
+
+export {
+  createProgressBar,
+  updateProgressLine2,
+  updateProgressDetail,
+  hideProgressDetail,
+  removeProgressBar,
+  expandProgress,
+  collapseProgress
+};

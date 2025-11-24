@@ -7,26 +7,38 @@ import {
   show,
   hide,
 } from '../utils/dom-utils.js';
+import type { AppConfig } from '../types/index.js';
+import StorageManager from '../storage/storage-manager.js';
+
+/**
+ * 帖子节点数据接口
+ */
+interface PostData {
+  floor: number;
+  children?: PostData[];
+}
 
 /**
  * 楼中楼折叠组件
  */
 class ReplyCollapser {
-  constructor(storageManager, config) {
+  private storageManager: StorageManager;
+  private config: AppConfig;
+  private threshold: number;
+  private enabled: boolean;
+  private expandedNodes = new Set<number>(); // 当前展开的节点
+
+  constructor(storageManager: StorageManager, config: AppConfig) {
     this.storageManager = storageManager;
-    this.config = config || {};
+    this.config = config;
     this.threshold = this.config.replyCollapseThreshold || 3;
     this.enabled = this.config.enableReplyCollapse !== false;
-    this.expandedNodes = new Set(); // 当前展开的节点
   }
 
   /**
    * 判断是否需要折叠
-   * @param {Object} node - 节点对象
-   * @param {number} level - 层级
-   * @returns {boolean}
    */
-  shouldCollapse(node, level) {
+  shouldCollapse(node: PostData, level: number): boolean {
     if (!this.enabled) return false;
     if (level <= 1) return false; // 主楼和一级回复不折叠
     if (!node.children || node.children.length <= this.threshold) return false;
@@ -35,11 +47,8 @@ class ReplyCollapser {
 
   /**
    * 创建折叠占位符
-   * @param {number} hiddenCount - 隐藏的回复数量
-   * @param {Function} onExpand - 展开回调
-   * @returns {HTMLElement}
    */
-  createCollapsePlaceholder(hiddenCount, onExpand) {
+  private createCollapsePlaceholder(hiddenCount: number, onExpand: () => void): HTMLElement {
     const placeholder = createElement('div', {
       className: 'nga-collapse-placeholder',
       styles: {
@@ -71,10 +80,8 @@ class ReplyCollapser {
 
   /**
    * 创建收起按钮
-   * @param {Function} onCollapse - 收起回调
-   * @returns {HTMLElement}
    */
-  createCollapseButton(onCollapse) {
+  private createCollapseButton(onCollapse: () => void): HTMLElement {
     const button = createElement('div', {
       className: 'nga-collapse-button',
       styles: {
@@ -107,12 +114,8 @@ class ReplyCollapser {
 
   /**
    * 应用折叠逻辑到节点
-   * @param {HTMLElement} container - 包含子回复的容器
-   * @param {Object} node - 节点数据
-   * @param {number} level - 层级
-   * @param {string} tid - 帖子 ID
    */
-  applyCollapse(container, node, level, tid) {
+  applyCollapse(container: HTMLElement, node: PostData, level: number, tid: string): void {
     if (!this.shouldCollapse(node, level)) {
       return;
     }
@@ -124,19 +127,18 @@ class ReplyCollapser {
     if (hiddenCount <= 0) return;
 
     // 检查是否已展开
-    const nodeId = `${tid}_${node.floor}`;
-    const isExpanded = this.expandedNodes.has(nodeId);
+    const isExpanded = this.expandedNodes.has(node.floor);
 
     if (!isExpanded) {
       // 隐藏超出阈值的回复
       for (let i = visibleCount; i < children.length; i++) {
-        addClass(children[i], 'nga-collapsed');
-        hide(children[i]);
+        addClass(children[i] as HTMLElement, 'nga-collapsed');
+        hide(children[i] as HTMLElement);
       }
 
       // 插入折叠占位符
       const placeholder = this.createCollapsePlaceholder(hiddenCount, () => {
-        this.expandNode(container, node, tid);
+        void this.expandNode(container, node, tid);
         placeholder.remove();
       });
 
@@ -144,7 +146,7 @@ class ReplyCollapser {
     } else {
       // 已展开，添加收起按钮
       const button = this.createCollapseButton(() => {
-        this.collapseNode(container, node, tid);
+        void this.collapseNode(container, node, tid);
       });
       container.appendChild(button);
     }
@@ -152,21 +154,19 @@ class ReplyCollapser {
 
   /**
    * 展开节点
-   * @param {HTMLElement} container
-   * @param {Object} node
-   * @param {string} tid
    */
-  expandNode(container, node, tid) {
+  private async expandNode(container: HTMLElement, node: PostData, tid: string): Promise<void> {
     const children = Array.from(container.children);
 
     // 显示所有隐藏的回复
     children.forEach((child) => {
-      if (child.classList.contains('nga-collapsed')) {
-        removeClass(child, 'nga-collapsed');
-        show(child);
+      const childElement = child as HTMLElement;
+      if (childElement.classList.contains('nga-collapsed')) {
+        removeClass(childElement, 'nga-collapsed');
+        show(childElement);
 
         // 添加展开动画
-        child.style.animation = 'ngaFadeIn 0.3s ease';
+        childElement.style.animation = 'ngaFadeIn 0.3s ease';
       }
     });
 
@@ -178,32 +178,28 @@ class ReplyCollapser {
 
     // 添加收起按钮
     const button = this.createCollapseButton(() => {
-      this.collapseNode(container, node, tid);
+      void this.collapseNode(container, node, tid);
     });
     container.appendChild(button);
 
     // 记录展开状态
-    const nodeId = `${tid}_${node.floor}`;
-    this.expandedNodes.add(nodeId);
+    this.expandedNodes.add(node.floor);
 
     // 保存状态
-    this.saveState(tid);
+    await this.saveState(tid);
   }
 
   /**
    * 折叠节点
-   * @param {HTMLElement} container
-   * @param {Object} node
-   * @param {string} tid
    */
-  collapseNode(container, node, tid) {
+  private async collapseNode(container: HTMLElement, node: PostData, tid: string): Promise<void> {
     const children = Array.from(container.children);
     const visibleCount = this.threshold;
     let hiddenCount = 0;
 
     // 隐藏超出阈值的回复
     for (let i = visibleCount; i < children.length; i++) {
-      const child = children[i];
+      const child = children[i] as HTMLElement;
       if (!child.classList.contains('nga-collapse-button')) {
         addClass(child, 'nga-collapsed');
         hide(child);
@@ -220,7 +216,7 @@ class ReplyCollapser {
     // 添加折叠占位符
     if (hiddenCount > 0) {
       const placeholder = this.createCollapsePlaceholder(hiddenCount, () => {
-        this.expandNode(container, node, tid);
+        void this.expandNode(container, node, tid);
         placeholder.remove();
       });
 
@@ -230,18 +226,16 @@ class ReplyCollapser {
     }
 
     // 移除展开状态
-    const nodeId = `${tid}_${node.floor}`;
-    this.expandedNodes.delete(nodeId);
+    this.expandedNodes.delete(node.floor);
 
     // 保存状态
-    this.saveState(tid);
+    await this.saveState(tid);
   }
 
   /**
    * 保存折叠状态
-   * @param {string} tid
    */
-  async saveState(tid) {
+  async saveState(tid: string): Promise<void> {
     if (this.storageManager) {
       try {
         await this.storageManager.saveCollapseState(tid, this.expandedNodes);
@@ -253,9 +247,8 @@ class ReplyCollapser {
 
   /**
    * 加载折叠状态
-   * @param {string} tid
    */
-  async loadState(tid) {
+  async loadState(tid: string): Promise<void> {
     if (this.storageManager) {
       try {
         const state = await this.storageManager.getCollapseState(tid);
@@ -269,9 +262,32 @@ class ReplyCollapser {
   }
 
   /**
+   * 获取当前展开状态
+   */
+  getExpandedNodes(): Set<number> {
+    return new Set(this.expandedNodes);
+  }
+
+  /**
+   * 清空展开状态
+   */
+  clearExpandedNodes(): void {
+    this.expandedNodes.clear();
+  }
+
+  /**
+   * 更新配置
+   */
+  updateConfig(newConfig: Partial<AppConfig>): void {
+    this.config = { ...this.config, ...newConfig };
+    this.threshold = this.config.replyCollapseThreshold || 3;
+    this.enabled = this.config.enableReplyCollapse !== false;
+  }
+
+  /**
    * 注入折叠样式
    */
-  static injectStyles() {
+  static injectStyles(): void {
     if (document.getElementById('nga-collapse-styles')) {
       return;
     }
@@ -299,6 +315,16 @@ class ReplyCollapser {
             }
         `;
     document.head.appendChild(style);
+  }
+
+  /**
+   * 移除注入的样式
+   */
+  static removeStyles(): void {
+    const style = document.getElementById('nga-collapse-styles');
+    if (style) {
+      style.remove();
+    }
   }
 }
 

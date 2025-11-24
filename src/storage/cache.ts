@@ -1,29 +1,74 @@
 // ========== 缓存管理模块 ==========
 
+import ConfigManager from './config.js';
+
+/**
+ * 线程元数据
+ */
+interface ThreadMeta {
+  tid: string;
+  title?: string;
+  totalPages?: number;
+  lastAccess: number;
+  cacheTime: number;
+  cachedPages?: number[];
+}
+
+/**
+ * 页面内容数据
+ */
+interface PageContentData {
+  page: number;
+  rawHTML: string;
+  timestamp: number;
+}
+
+/**
+ * 缓存信息
+ */
+interface CacheInfo {
+  tid: string;
+  lastAccess: number;
+  size: number;
+  manager: CacheManager;
+}
+
+/**
+ * 缓存管理类
+ */
 class CacheManager {
-  constructor(tid) {
+  private tid: string;
+  private metaKey: string;
+
+  constructor(tid: string) {
     this.tid = tid;
     this.metaKey = `NGA_THREAD_META_${tid}`;
   }
 
-  getMeta() {
+  /**
+   * 获取线程元数据
+   */
+  getMeta(): ThreadMeta | null {
     try {
       const data = GM_getValue(this.metaKey);
-      if (data) return JSON.parse(data);
+      if (data) return JSON.parse(data) as ThreadMeta;
     } catch (e) {
       console.error('[缓存管理] 读取元数据失败:', e);
     }
     return null;
   }
 
-  saveMeta(meta) {
+  /**
+   * 保存线程元数据
+   */
+  saveMeta(meta: ThreadMeta): boolean {
     try {
       GM_setValue(this.metaKey, JSON.stringify(meta));
 
       // 更新缓存索引
       const cacheIndexKey = 'NGA_CACHE_INDEX';
       const cacheIndexData = GM_getValue(cacheIndexKey);
-      let tidList = cacheIndexData ? JSON.parse(cacheIndexData) : [];
+      let tidList = cacheIndexData ? JSON.parse(cacheIndexData) as string[] : [];
 
       if (!tidList.includes(this.tid)) {
         tidList.push(this.tid);
@@ -49,7 +94,10 @@ class CacheManager {
     }
   }
 
-  updateLastAccess() {
+  /**
+   * 更新最后访问时间
+   */
+  updateLastAccess(): void {
     const meta = this.getMeta();
     if (meta) {
       meta.lastAccess = Date.now();
@@ -57,21 +105,27 @@ class CacheManager {
     }
   }
 
-  getPageContent(page) {
+  /**
+   * 获取页面内容
+   */
+  getPageContent(page: number): PageContentData | null {
     try {
       const key = `NGA_PAGE_CONTENT_${this.tid}_${page}`;
       const data = GM_getValue(key);
-      if (data) return JSON.parse(data);
+      if (data) return JSON.parse(data) as PageContentData;
     } catch (e) {
       console.error(`[缓存管理] 读取第${page}页内容失败:`, e);
     }
     return null;
   }
 
-  savePageContent(page, rawHTML) {
+  /**
+   * 保存页面内容
+   */
+  savePageContent(page: number, rawHTML: string): boolean {
     try {
       const key = `NGA_PAGE_CONTENT_${this.tid}_${page}`;
-      const data = { page, rawHTML, timestamp: Date.now() };
+      const data: PageContentData = { page, rawHTML, timestamp: Date.now() };
       GM_setValue(key, JSON.stringify(data));
       console.log(`[缓存管理] 第${page}页内容已缓存`);
       return true;
@@ -81,7 +135,10 @@ class CacheManager {
     }
   }
 
-  isCacheValid(cacheExpireTime) {
+  /**
+   * 检查缓存是否有效
+   */
+  isCacheValid(cacheExpireTime: number): boolean {
     const meta = this.getMeta();
     if (!meta) return false;
     if (cacheExpireTime === -1) return true;
@@ -89,7 +146,10 @@ class CacheManager {
     return now - meta.lastAccess < cacheExpireTime;
   }
 
-  clearCache() {
+  /**
+   * 清理缓存
+   */
+  clearCache(): boolean {
     try {
       const meta = this.getMeta();
       if (meta && meta.cachedPages) {
@@ -104,7 +164,7 @@ class CacheManager {
       const cacheIndexKey = 'NGA_CACHE_INDEX';
       const cacheIndexData = GM_getValue(cacheIndexKey);
       if (cacheIndexData) {
-        let tidList = JSON.parse(cacheIndexData);
+        let tidList = JSON.parse(cacheIndexData) as string[];
         tidList = tidList.filter((tid) => tid !== this.tid);
         GM_setValue(cacheIndexKey, JSON.stringify(tidList));
         console.log('[缓存管理] 已从索引中移除 tid:', this.tid);
@@ -118,8 +178,10 @@ class CacheManager {
     }
   }
 
-  // 获取缓存大小
-  getCacheSize() {
+  /**
+   * 获取缓存大小
+   */
+  getCacheSize(): number {
     try {
       const meta = this.getMeta();
       if (!meta || !meta.cachedPages) return 0;
@@ -141,14 +203,16 @@ class CacheManager {
     }
   }
 
-  // 静态方法：获取所有缓存的总大小
-  static getTotalCacheSize() {
+  /**
+   * 获取所有缓存的总大小
+   */
+  static getTotalCacheSize(): number {
     try {
       const cacheIndexKey = 'NGA_CACHE_INDEX';
       const cacheIndexData = GM_getValue(cacheIndexKey);
       if (!cacheIndexData) return 0;
 
-      const tidList = JSON.parse(cacheIndexData);
+      const tidList = JSON.parse(cacheIndexData) as string[];
       let totalSize = 0;
 
       tidList.forEach((tid) => {
@@ -163,17 +227,19 @@ class CacheManager {
     }
   }
 
-  // 静态方法：清理最旧的缓存直到满足容量限制
-  static cleanOldestCache(maxSize) {
+  /**
+   * 清理最旧的缓存直到满足容量限制
+   */
+  static cleanOldestCache(maxSize: number): void {
     try {
       const cacheIndexKey = 'NGA_CACHE_INDEX';
       const cacheIndexData = GM_getValue(cacheIndexKey);
       if (!cacheIndexData) return;
 
-      const tidList = JSON.parse(cacheIndexData);
+      const tidList = JSON.parse(cacheIndexData) as string[];
 
       // 收集所有缓存信息
-      const cacheInfoList = [];
+      const cacheInfoList: CacheInfo[] = [];
       tidList.forEach((tid) => {
         const manager = new CacheManager(tid);
         const meta = manager.getMeta();
@@ -197,12 +263,14 @@ class CacheManager {
       let cleanedCount = 0;
       while (totalSize > maxSize && cacheInfoList.length > 0) {
         const oldest = cacheInfoList.shift();
-        totalSize -= oldest.size;
-        oldest.manager.clearCache();
-        cleanedCount++;
-        console.log(
-          `[缓存管理] 已清理旧缓存 tid=${oldest.tid}, 大小=${(oldest.size / 1024).toFixed(2)}KB`
-        );
+        if (oldest) {
+          totalSize -= oldest.size;
+          oldest.manager.clearCache();
+          cleanedCount++;
+          console.log(
+            `[缓存管理] 已清理旧缓存 tid=${oldest.tid}, 大小=${(oldest.size / 1024).toFixed(2)}KB`
+          );
+        }
       }
 
       if (cleanedCount > 0) {
@@ -215,3 +283,5 @@ class CacheManager {
     }
   }
 }
+
+export default CacheManager;
