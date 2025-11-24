@@ -19,7 +19,7 @@
     "nested-replies",
     "typescript"
   ],
-  "author": "cloud_rider",
+  "author": "cloud_rider;ChangingSelf",
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^24.10.1",

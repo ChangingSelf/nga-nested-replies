@@ -11,7 +11,7 @@ export default defineConfig({
         version: '2.2.0',
         description:
           '遍历帖子所有界面并自动展开折叠内容，然后重新组织为楼中楼形式。支持渐进式加载、智能缓存、配置管理（Vite构建版）',
-        author: 'cloud_rider',
+        author: 'cloud_rider;ChangingSelf',
         match: [
           'https://bbs.nga.cn/read.php?tid=*',
           'https://ngabbs.com/read.php?tid=*',
