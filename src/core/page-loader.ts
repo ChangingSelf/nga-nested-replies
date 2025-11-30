@@ -313,7 +313,7 @@ class PageLoader {
   private loadSinglePage(page: number): Promise<string | null> {
     return new Promise((resolve) => {
       const url = `${window.location.origin}/read.php?tid=${this.tid}&loader=1&page=${page}`;
-      GM_openInTab(url, false);
+      GM_openInTab(url, true);
 
       const key = `POSTS_${page}`;
       const startTime = Date.now();
