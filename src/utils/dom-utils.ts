@@ -278,3 +278,43 @@ export function scrollTo(
     element.scrollIntoView(options);
   }
 }
+
+/**
+ * 展开所有折叠内容
+ * @param container - 容器元素
+ */
+export function expandAllCollapses(container: HTMLElement): void {
+  try {
+    const buttons = container.querySelectorAll(
+      'button[name="collapseSwitchButton"]'
+    ) as NodeListOf<HTMLButtonElement>;
+    console.log('[自动展开] 找到', buttons.length, '个折叠按钮');
+
+    let expanded = 0;
+    buttons.forEach((button) => {
+      try {
+        if (button.textContent === '+') {
+          button.click();
+          button.textContent = '-';
+          expanded++;
+        }
+      } catch (e) {
+        console.warn('[自动展开] 按钮点击失败:', e);
+        const collapseDiv = button.parentNode?.nextSibling as HTMLElement;
+        if (
+          collapseDiv &&
+          collapseDiv.classList.contains('collapse') &&
+          (collapseDiv.style.display === 'none' || !collapseDiv.style.display)
+        ) {
+          collapseDiv.style.display = 'block';
+          button.textContent = '-';
+          expanded++;
+        }
+      }
+    });
+
+    console.log('[自动展开] 完成展开', expanded, '个折叠');
+  } catch (e) {
+    console.error('[自动展开] 展开折叠失败:', e);
+  }
+}

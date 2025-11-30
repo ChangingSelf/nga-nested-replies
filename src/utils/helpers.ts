@@ -1,5 +1,7 @@
 // ========== 工具函数模块 ==========
 
+import type { PageInfo } from '../types/index.js';
+
 /**
  * 格式化文件大小
  * @param bytes - 字节数
@@ -36,13 +38,62 @@ export function formatTime(timestamp: number): string {
 }
 
 /**
- * 从URL提取tid
- * @returns tid或null
+ * 从 URL 提取 tid
+ * @returns {string|null}
  */
 export function extractTid(): string | null {
   const urlParams = new URLSearchParams(window.location.search);
-  const tid = urlParams.get('tid');
-  return tid;
+  const tidFromParam = urlParams.get('tid');
+
+  if (tidFromParam) {
+    console.log('[TID 提取] 从 URL 参数获取 tid:', tidFromParam);
+    return tidFromParam;
+  }
+
+  const match = window.location.href.match(/[?&]tid=(\d+)/);
+  if (match) {
+    console.log('[TID 提取] 从 URL 匹配获取 tid:', match[1]);
+    return match[1];
+  }
+
+  console.warn('[TID 提取] 未能提取 tid');
+  return null;
+}
+
+/**
+ * 解析页面信息
+ * @returns {PageInfo}
+ */
+export function parsePageInfo(): PageInfo {
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    let totalPages = 1;
+    let currentPage = parseInt(urlParams.get('page') || '1');
+
+    const links = document.querySelectorAll('#pagebtop a, #pagebbtm a');
+    links.forEach((link) => {
+      const text = link.textContent?.trim();
+      const num = parseInt(text || '');
+      if (!isNaN(num)) totalPages = Math.max(totalPages, num);
+    });
+
+    const lastPageLink = document.querySelector(
+      '#pagebtop a[title*="最后页"], #pagebbtm a[title*="最后页"]'
+    );
+    if (lastPageLink) {
+      const match = (lastPageLink as HTMLAnchorElement).href.match(/page=(\d+)/);
+      if (match) {
+        const lastPage = parseInt(match[1]);
+        if (lastPage > totalPages) totalPages = lastPage;
+      }
+    }
+
+    console.log('[页面解析] 当前页:', currentPage, '总页数:', totalPages);
+    return { totalPages, currentPage };
+  } catch (e) {
+    console.error('[页面解析] 解析失败:', e);
+    return { totalPages: 1, currentPage: 1 };
+  }
 }
 
 /**
